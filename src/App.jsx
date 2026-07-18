@@ -12,7 +12,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
-        <Route path="/superadmin" element={<AdminLayout />}>
+        <Route path="/admin" element={<AdminLayout />}>
           {superAdminRoutes.map((r) => {
             return <Route key={r.name} path={r.path} element={r.element} />;
           })}
