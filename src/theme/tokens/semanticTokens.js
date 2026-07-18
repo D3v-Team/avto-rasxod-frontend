@@ -2,39 +2,25 @@ const semanticTokens = {
     colors: {
         // Asosiy fon
         bg: {
-            default: "neutral.50",
-            _dark: "neutral.900",
+            default: "#f8fafc",
+            _dark: "#0f172a",
         },
         surface: {
             default: "#ffffff",
-            _dark: "neutral.800",
-        },
-        surfBlur: {
-            default: 'rgba(255, 255, 255, 0.85)',
-            _dark: "rgba(28, 25, 23, 0.85)"
+            _dark: "#1e293b",
         },
 
         // Matn ranglari
         text: {
-            default: "neutral.800",
-            _dark: "neutral.100",
+            default: "#0f172a",
+            _dark: "#f8fafc",
         },
         textSecondary: {
-            default: "neutral.600",
-            _dark: "neutral.400"
-        },
-        textLight: {
-            default: "#ffffff",
-            _dark: "neutral.200",
+            default: "#475569",
+            _dark: "#94a3b8",
         },
 
-        // Linklar
-        link: {
-            default: "primary.500",
-            _dark: "primary.400",
-        },
-
-        // PRIMARY - sabzi
+        // PRIMARY - ko'k
         primary: {
             default: "primary.500",
             _dark: "primary.400",
@@ -48,7 +34,7 @@ const semanticTokens = {
             _dark: "primary.900",
         },
 
-        // SECONDARY - sariq
+        // SECONDARY
         secondary: {
             default: "secondary.500",
             _dark: "secondary.400",
@@ -58,7 +44,7 @@ const semanticTokens = {
             _dark: "secondary.900",
         },
 
-        // ACCENT - qizil
+        // ACCENT
         accent: {
             default: "accent.500",
             _dark: "accent.400",
@@ -70,12 +56,8 @@ const semanticTokens = {
 
         // Chegaralar
         border: {
-            default: "neutral.200",
-            _dark: "neutral.700",
-        },
-        borderLight: {
-            default: "neutral.100",
-            _dark: "neutral.800",
+            default: "#e2e8f0",
+            _dark: "#334155",
         },
 
         // Success
@@ -88,16 +70,6 @@ const semanticTokens = {
             _dark: "green.900",
         },
 
-        // Warning
-        warning: {
-            default: "amber.500",
-            _dark: "amber.400",
-        },
-        warningBg: {
-            default: "amber.50",
-            _dark: "amber.900",
-        },
-
         // Danger
         danger: {
             default: "red.500",
@@ -108,100 +80,30 @@ const semanticTokens = {
             _dark: "red.900",
         },
 
-        // Info
-        info: {
-            default: "blue.500",
-            _dark: "blue.400",
-        },
-        infoBg: {
-            default: "blue.50",
-            _dark: "blue.900",
-        },
-
-        // Muted
-        muted: {
-            default: "neutral.400",
-            _dark: "neutral.500",
-        },
-        mutedBg: {
-            default: "neutral.100",
-            _dark: "neutral.700",
-        },
-
-        // Chart colors - sabzi gamuti
+        // Chart colors
         chartPrimary: {
-            default: "primary.500",
-            _dark: "primary.400",
+            default: "#3B82F6",
+            _dark: "#60a5fa",
         },
         chartSecondary: {
-            default: "secondary.500",
-            _dark: "secondary.400",
+            default: "#0EA5E9",
+            _dark: "#38bdf8",
         },
         chartAccent: {
-            default: "accent.500",
-            _dark: "accent.400",
+            default: "#6366F1",
+            _dark: "#818cf8",
         },
         chartSuccess: {
-            default: "green.500",
-            _dark: "green.400",
+            default: "#22C55E",
+            _dark: "#4ade80",
         },
         chartDanger: {
-            default: "red.500",
-            _dark: "red.400",
+            default: "#EF4444",
+            _dark: "#f87171",
         },
-        chartAmber: {
-            default: "amber.500",
-            _dark: "amber.400",
-        },
-        chartYellow: {
-            default: "yellow.500",
-            _dark: "yellow.400",
-        },
-        chartOrange: {
-            default: "orange.500",
-            _dark: "orange.400",
-        },
-
-        // Holatlar
-        onRoad: {
-            default: "green.500",
-            _dark: "green.400",
-        },
-        onRoadBg: {
-            default: "green.50",
-            _dark: "green.900",
-        },
-        inRepair: {
-            default: "red.500",
-            _dark: "red.400",
-        },
-        inRepairBg: {
-            default: "red.50",
-            _dark: "red.900",
-        },
-        available: {
-            default: "primary.500",
-            _dark: "primary.400",
-        },
-        availableBg: {
-            default: "primary.50",
-            _dark: "primary.900",
-        },
-        pending: {
-            default: "amber.500",
-            _dark: "amber.400",
-        },
-        pendingBg: {
-            default: "amber.50",
-            _dark: "amber.900",
-        },
-        completed: {
-            default: "secondary.500",
-            _dark: "secondary.400",
-        },
-        completedBg: {
-            default: "secondary.50",
-            _dark: "secondary.900",
+        chartGray: {
+            default: "#64748b",
+            _dark: "#94a3b8",
         },
     },
 };

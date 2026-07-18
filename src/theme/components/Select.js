@@ -6,27 +6,28 @@ const Select = {
             borderRadius: "lg",
             fontWeight: "500",
             bg: "white",
-            color: "text",
+            color: "#0f172a",
             border: "1.5px solid",
-            borderColor: "neutral.200",
+            borderColor: "#e2e8f0",
             transition: "all 0.3s ease",
             _placeholder: {
-                color: "neutral.400",
+                color: "#94a3b8",
             },
             _hover: {
-                borderColor: "primary.400",
-                boxShadow: "0 2px 8px rgba(249, 115, 22, 0.1)",
+                borderColor: "#3B82F6",
+                boxShadow: "0 2px 8px rgba(59, 130, 246, 0.1)",
             },
             _focus: {
-                borderColor: "primary.500",
-                boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
+                borderColor: "#3B82F6",
+                boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.15)",
             },
             _dark: {
-                bg: "neutral.800",
-                borderColor: "neutral.700",
+                bg: "#1e293b",
+                borderColor: "#334155",
+                color: "#f8fafc",
                 _hover: {
-                    borderColor: "primary.400",
-                    boxShadow: "0 2px 8px rgba(249, 115, 22, 0.2)",
+                    borderColor: "#60a5fa",
+                    boxShadow: "0 2px 8px rgba(59, 130, 246, 0.2)",
                 },
             },
             _disabled: {
@@ -34,13 +35,13 @@ const Select = {
                 cursor: "not-allowed",
             },
             _invalid: {
-                borderColor: "danger",
+                borderColor: "#EF4444",
                 boxShadow: "0 0 0 3px rgba(239, 68, 68, 0.15)",
             },
         },
         icon: {
-            color: "primary.500",
-            _dark: { color: "primary.400" },
+            color: "#3B82F6",
+            _dark: { color: "#60a5fa" },
         },
     },
 
@@ -94,104 +95,75 @@ const Select = {
     },
 
     variants: {
-        // Standart
         filledPrimary: {
             field: {
                 bg: "white",
-                borderColor: "neutral.200",
+                borderColor: "#e2e8f0",
                 _dark: {
-                    bg: "neutral.800",
-                    borderColor: "neutral.700",
+                    bg: "#1e293b",
+                    borderColor: "#334155",
                 },
                 _hover: {
-                    borderColor: "primary.400",
-                    boxShadow: "0 2px 8px rgba(249, 115, 22, 0.1)",
+                    borderColor: "#3B82F6",
                 },
                 _focus: {
-                    borderColor: "primary.500",
-                    boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
+                    borderColor: "#3B82F6",
+                    boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.15)",
                 },
             },
         },
 
-        // Soft - yumshoq sabzi
         soft: {
             field: {
-                bg: "primary.50",
-                borderColor: "primary.200",
+                bg: "#eff6ff",
+                borderColor: "#bfdbfe",
                 _dark: {
-                    bg: "primary.900",
-                    borderColor: "primary.700",
+                    bg: "#1e3a8a",
+                    borderColor: "#1d4ed8",
                 },
                 _hover: {
-                    borderColor: "primary.400",
-                    boxShadow: "0 2px 8px rgba(249, 115, 22, 0.1)",
+                    borderColor: "#3B82F6",
                 },
                 _focus: {
-                    borderColor: "primary.500",
-                    boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
+                    borderColor: "#3B82F6",
+                    boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.15)",
                 },
             },
         },
 
-        // Outline
         outlinePrimary: {
             field: {
                 bg: "transparent",
                 borderWidth: "1.5px",
-                borderColor: "neutral.300",
+                borderColor: "#cbd5e1",
                 _dark: {
-                    borderColor: "neutral.600",
+                    borderColor: "#334155",
                 },
                 _hover: {
-                    borderColor: "primary.400",
-                    boxShadow: "0 2px 8px rgba(249, 115, 22, 0.1)",
+                    borderColor: "#3B82F6",
                 },
                 _focus: {
-                    borderColor: "primary.500",
-                    boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.15)",
+                    borderColor: "#3B82F6",
+                    boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.15)",
                 },
             },
         },
 
-        // Amber
-        amber: {
-            field: {
-                bg: "amber.50",
-                borderColor: "amber.300",
-                color: "amber.800",
-                _dark: {
-                    bg: "amber.900",
-                    borderColor: "amber.700",
-                    color: "amber.100",
-                },
-                _hover: {
-                    borderColor: "amber.400",
-                    boxShadow: "0 2px 8px rgba(245, 158, 11, 0.1)",
-                },
-                _focus: {
-                    borderColor: "amber.500",
-                    boxShadow: "0 0 0 3px rgba(245, 158, 11, 0.15)",
-                },
-            },
-        },
-
-        // Clean
         clean: {
             field: {
                 bg: "transparent",
                 border: "none",
                 borderBottom: "2px solid",
-                borderColor: "neutral.200",
+                borderColor: "#e2e8f0",
                 borderRadius: "0",
                 _dark: {
-                    borderColor: "neutral.700",
+                    borderColor: "#334155",
                 },
                 _hover: {
-                    borderColor: "primary.400",
+                    borderColor: "#3B82F6",
                 },
                 _focus: {
-                    borderColor: "primary.500",
+                    borderColor: "#3B82F6",
                     boxShadow: "none",
                 },
             },

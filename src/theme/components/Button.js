@@ -5,7 +5,7 @@ const Button = {
         letterSpacing: "0.2px",
         transition: "all 0.3s ease",
         _focus: {
-            boxShadow: "0 0 0 3px rgba(249, 115, 22, 0.3)",
+            boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.3)",
         },
     },
     sizes: {
@@ -33,170 +33,129 @@ const Button = {
     },
 
     variants: {
-        // Asosiy - sabzi
         solidPrimary: {
-            bg: "primary.500",
+            bg: "#3B82F6",
             color: "white",
             _hover: { 
-                bg: "primary.600",
+                bg: "#2563eb",
                 transform: "translateY(-1px)",
-                boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
+                boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
             },
             _active: { 
-                bg: "primary.700",
+                bg: "#1d4ed8",
                 transform: "translateY(0)",
             },
         },
 
-        // Ikkilamchi - sariq
         solidSecondary: {
-            bg: "secondary.500",
+            bg: "#0EA5E9",
             color: "white",
             _hover: { 
-                bg: "secondary.600",
+                bg: "#0284c7",
                 transform: "translateY(-1px)",
-                boxShadow: "0 4px 12px rgba(234, 179, 8, 0.3)",
+                boxShadow: "0 4px 12px rgba(14, 165, 233, 0.3)",
             },
             _active: { 
-                bg: "secondary.700",
+                bg: "#0369a1",
                 transform: "translateY(0)",
             },
         },
 
-        // Aksent - qizil
         solidAccent: {
-            bg: "accent.500",
+            bg: "#6366F1",
             color: "white",
             _hover: { 
-                bg: "accent.600",
+                bg: "#4f46e5",
                 transform: "translateY(-1px)",
-                boxShadow: "0 4px 12px rgba(239, 68, 68, 0.3)",
+                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
             },
             _active: { 
-                bg: "accent.700",
+                bg: "#4338ca",
                 transform: "translateY(0)",
             },
         },
 
-        // Amber
-        solidAmber: {
-            bg: "amber.500",
-            color: "white",
-            _hover: { 
-                bg: "amber.600",
-                transform: "translateY(-1px)",
-                boxShadow: "0 4px 12px rgba(245, 158, 11, 0.3)",
-            },
-            _active: { 
-                bg: "amber.700",
-                transform: "translateY(0)",
-            },
-        },
-
-        // Outline - sabzi
         outlinePrimary: {
             border: "2px solid",
-            borderColor: "primary.500",
-            color: "primary.500",
+            borderColor: "#3B82F6",
+            color: "#3B82F6",
             bg: "transparent",
             _hover: {
-                bg: "primary.50",
+                bg: "#eff6ff",
                 transform: "translateY(-1px)",
                 _dark: {
-                    bg: "primary.900",
+                    bg: "#1e3a8a",
                 },
             },
             _active: {
-                bg: "primary.100",
+                bg: "#dbeafe",
                 _dark: {
-                    bg: "primary.800",
+                    bg: "#1e40af",
                 },
             }
         },
 
-        // Outline - sariq
-        outlineSecondary: {
-            border: "2px solid",
-            borderColor: "secondary.500",
-            color: "secondary.500",
-            bg: "transparent",
-            _hover: {
-                bg: "secondary.50",
-                transform: "translateY(-1px)",
-                _dark: {
-                    bg: "secondary.900",
-                },
-            },
-            _active: {
-                bg: "secondary.100",
-                _dark: {
-                    bg: "secondary.800",
-                },
-            }
-        },
-
-        // Soft - yumshoq sabzi
         soft: {
-            bg: "primary.100",
-            color: "primary.700",
+            bg: "#eff6ff",
+            color: "#1d4ed8",
             _hover: {
-                bg: "primary.200",
+                bg: "#dbeafe",
                 transform: "translateY(-1px)",
                 _dark: {
-                    bg: "primary.800",
-                    color: "primary.200",
+                    bg: "#1e3a8a",
+                    color: "#60a5fa",
                 },
             },
             _active: {
-                bg: "primary.300",
+                bg: "#bfdbfe",
                 _dark: {
-                    bg: "primary.700",
+                    bg: "#1e40af",
                 },
             }
         },
 
-        // Success
         solidSuccess: {
-            bg: "green.500",
+            bg: "#22C55E",
             color: "white",
             _hover: { 
-                bg: "green.600",
+                bg: "#16a34a",
                 transform: "translateY(-1px)",
                 boxShadow: "0 4px 12px rgba(34, 197, 94, 0.3)",
             },
             _active: { 
-                bg: "green.700",
+                bg: "#15803d",
                 transform: "translateY(0)",
             },
         },
 
-        // Danger
         solidDanger: {
-            bg: "red.500",
+            bg: "#EF4444",
             color: "white",
             _hover: { 
-                bg: "red.600",
+                bg: "#dc2626",
                 transform: "translateY(-1px)",
                 boxShadow: "0 4px 12px rgba(239, 68, 68, 0.3)",
             },
             _active: { 
-                bg: "red.700",
+                bg: "#b91c1c",
                 transform: "translateY(0)",
             },
         },
 
-        // Ghost
         ghost: {
             bg: "transparent",
-            color: "text",
+            color: "#0f172a",
             _hover: {
-                bg: "neutral.100",
+                bg: "#f1f5f9",
                 transform: "translateY(-1px)",
-                _dark: { bg: "neutral.700" },
+                _dark: { 
+                    bg: "#334155",
+                    color: "#f8fafc",
+                },
             },
             _active: {
-                bg: "neutral.200",
-                _dark: { bg: "neutral.600" },
+                bg: "#e2e8f0",
+                _dark: { bg: "#475569" },
             }
         },
     },
