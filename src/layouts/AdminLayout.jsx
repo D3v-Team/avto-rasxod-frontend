@@ -5,11 +5,11 @@ import { useUIStore } from "../store/useUIStore";
 import { Car, Fuel, HomeIcon, Users, Wallet2 } from "lucide-react";
 
 const links = [
-  { label: "Bosh sahifa", to: "/superadmin/dashboard", icon: HomeIcon },
-  { label: "Xarajatlar", to: "/superadmin/costs", icon: Wallet2 },
-  { label: "Avtomobillar", to: "/superadmin/cars", icon: Car },
-  { label: "Xodimlar", to: "/superadmin/admins", icon: Users },
-  { label: "Yoqilg'i", to: "/superadmin/fuel", icon: Fuel },
+  { label: "Bosh sahifa", to: "/admin/dashboard", icon: HomeIcon },
+  { label: "Xarajatlar", to: "/admin/costs", icon: Wallet2 },
+  { label: "Avtomobillar", to: "/admin/cars", icon: Car },
+  { label: "Xodimlar", to: "/admin/admins", icon: Users },
+  { label: "Yoqilg'i", to: "/admin/fuel", icon: Fuel },
 ];
 
 export default function AdminLayout() {
