@@ -1,42 +1,84 @@
 const semanticTokens = {
     colors: {
+        // Asosiy fon
         bg: {
             default: "neutral.50",
             _dark: "neutral.900",
         },
         surface: {
-            default: "white",
+            default: "#ffffff",
             _dark: "neutral.800",
         },
         surfBlur: {
-            default: 'rgba(255, 255, 255, 0.7)',
-            _dark: "rgba(20, 20, 20, 0.65)"
+            default: 'rgba(255, 255, 255, 0.85)',
+            _dark: "rgba(28, 25, 23, 0.85)"
         },
+
+        // Matn ranglari
         text: {
             default: "neutral.800",
             _dark: "neutral.100",
         },
         textSecondary: {
             default: "neutral.600",
-            _dark: "neutral.300"
+            _dark: "neutral.400"
         },
+        textLight: {
+            default: "#ffffff",
+            _dark: "neutral.200",
+        },
+
+        // Linklar
         link: {
-            default: "brand.500",
-            _dark: "brand.300"
+            default: "primary.500",
+            _dark: "primary.400",
         },
+
+        // PRIMARY - sabzi
         primary: {
-            default: "brand.600",
-            _dark: "brand.500",
+            default: "primary.500",
+            _dark: "primary.400",
         },
+        primaryLight: {
+            default: "primary.100",
+            _dark: "primary.900",
+        },
+        primaryBg: {
+            default: "primary.50",
+            _dark: "primary.900",
+        },
+
+        // SECONDARY - sariq
         secondary: {
-            default: "brand.500",
-            _dark: "brand.600",
+            default: "secondary.500",
+            _dark: "secondary.400",
         },
+        secondaryLight: {
+            default: "secondary.100",
+            _dark: "secondary.900",
+        },
+
+        // ACCENT - qizil
+        accent: {
+            default: "accent.500",
+            _dark: "accent.400",
+        },
+        accentLight: {
+            default: "accent.100",
+            _dark: "accent.900",
+        },
+
+        // Chegaralar
         border: {
-            default: "neutral.300",
+            default: "neutral.200",
             _dark: "neutral.700",
         },
-        // Success (foyda, to'langan, musbat)
+        borderLight: {
+            default: "neutral.100",
+            _dark: "neutral.800",
+        },
+
+        // Success
         success: {
             default: "green.500",
             _dark: "green.400",
@@ -46,17 +88,17 @@ const semanticTokens = {
             _dark: "green.900",
         },
 
-        // Warning (kutilmoqda, qisman)
+        // Warning
         warning: {
-            default: "orange.500",
-            _dark: "orange.400",
+            default: "amber.500",
+            _dark: "amber.400",
         },
         warningBg: {
-            default: "orange.50",
-            _dark: "orange.900",
+            default: "amber.50",
+            _dark: "amber.900",
         },
 
-        // Danger (zarar, qarz, manfiy)
+        // Danger
         danger: {
             default: "red.500",
             _dark: "red.400",
@@ -66,7 +108,7 @@ const semanticTokens = {
             _dark: "red.900",
         },
 
-        // Info (ma'lumot)
+        // Info
         info: {
             default: "blue.500",
             _dark: "blue.400",
@@ -76,28 +118,90 @@ const semanticTokens = {
             _dark: "blue.900",
         },
 
-        // Muted (o'chirilgan, ikkilamchi)
+        // Muted
         muted: {
-            default: "gray.500",
-            _dark: "gray.500",
+            default: "neutral.400",
+            _dark: "neutral.500",
         },
         mutedBg: {
-            default: "gray.100",
-            _dark: "gray.700",
+            default: "neutral.100",
+            _dark: "neutral.700",
         },
 
-        // Chart colors
-        chartIncoming: {
+        // Chart colors - sabzi gamuti
+        chartPrimary: {
+            default: "primary.500",
+            _dark: "primary.400",
+        },
+        chartSecondary: {
+            default: "secondary.500",
+            _dark: "secondary.400",
+        },
+        chartAccent: {
+            default: "accent.500",
+            _dark: "accent.400",
+        },
+        chartSuccess: {
             default: "green.500",
             _dark: "green.400",
         },
-        chartOutgoing: {
-            default: "blue.500",
-            _dark: "blue.400",
+        chartDanger: {
+            default: "red.500",
+            _dark: "red.400",
         },
-        chartDisposal: {
+        chartAmber: {
+            default: "amber.500",
+            _dark: "amber.400",
+        },
+        chartYellow: {
+            default: "yellow.500",
+            _dark: "yellow.400",
+        },
+        chartOrange: {
             default: "orange.500",
             _dark: "orange.400",
+        },
+
+        // Holatlar
+        onRoad: {
+            default: "green.500",
+            _dark: "green.400",
+        },
+        onRoadBg: {
+            default: "green.50",
+            _dark: "green.900",
+        },
+        inRepair: {
+            default: "red.500",
+            _dark: "red.400",
+        },
+        inRepairBg: {
+            default: "red.50",
+            _dark: "red.900",
+        },
+        available: {
+            default: "primary.500",
+            _dark: "primary.400",
+        },
+        availableBg: {
+            default: "primary.50",
+            _dark: "primary.900",
+        },
+        pending: {
+            default: "amber.500",
+            _dark: "amber.400",
+        },
+        pendingBg: {
+            default: "amber.50",
+            _dark: "amber.900",
+        },
+        completed: {
+            default: "secondary.500",
+            _dark: "secondary.400",
+        },
+        completedBg: {
+            default: "secondary.50",
+            _dark: "secondary.900",
         },
     },
 };
