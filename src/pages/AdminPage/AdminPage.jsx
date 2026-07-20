@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Box,
   Card,
@@ -30,49 +30,26 @@ import {
   Select,
   useDisclosure,
   useToast,
-  AlertDialog,
-  AlertDialogOverlay,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogBody,
-  AlertDialogFooter,
+ 
   Avatar,
   Tooltip,
+  Spinner,
+  Center,
 } from "@chakra-ui/react";
 import { Search, Plus, Pencil, Trash2, Users } from "lucide-react";
+import { apiEmployees } from "../../Services/api/Users";
 
 // Yagona ohang — sof ko'k
 const ACCENT = "#3B82F6";
 
-// Fake/mock data — API tayyor bo'lgach almashtiriladi
-const initialAdmins = [
-  {
-    id: 1,
-    fullName: "Р.Турсунмурадов",
-    login: "r.tursunmurodov",
-    phone: "+998 90 123 45 67",
-    role: "Bosh admin",
-  },
-  {
-    id: 2,
-    fullName: "И.Худойбердиев",
-    login: "i.xudoyberdiev",
-    phone: "+998 91 234 56 78",
-    role: "Admin",
-  },
-  {
-    id: 3,
-    fullName: "С.Акрамов",
-    login: "s.akramov",
-    phone: "+998 93 345 67 89",
-    role: "Admin",
-  },
-];
-
-const emptyForm = { fullName: "", login: "", phone: "", role: "Admin" };
+// Boshlang'ich holat backendga moslab "driver" qilib belgilandi
+const emptyForm = { fullName: "", login: "", phone: "", role: "driver" };
 
 export default function AdminPage() {
-  const [admins, setAdmins] = useState(initialAdmins);
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -87,11 +64,44 @@ export default function AdminPage() {
   const cancelRef = useRef();
   const toast = useToast();
 
+  // Backenddan xodimlarni yuklash
+  const fetchEmployees = async () => {
+    setLoading(true);
+    try {
+      const res = await apiEmployees.All();
+      const rawData = res.data?.data || res.data || [];
+
+      const mappedAdmins = rawData.map((emp) => ({
+        id: emp.id,
+        fullName: emp.full_name || "Ismsiz xodim",
+        phone: emp.phone || "",
+        login:
+          emp.login || emp.full_name?.toLowerCase().replace(/\s+/g, "") || "",
+        role: emp.role || "driver", // Kelayotgan rol saqlanadi, yo'q bo'lsa default driver
+      }));
+
+      setAdmins(mappedAdmins);
+    } catch (error) {
+      console.error("Xodimlarni yuklashda xatolik:", error);
+      toast({
+        title: "Ma'lumotlarni yuklab bo'lmadi",
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
   const filteredAdmins = admins.filter(
     (a) =>
-      a.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      a.login.toLowerCase().includes(search.toLowerCase()) ||
-      a.phone.toLowerCase().includes(search.toLowerCase()),
+      (a.fullName?.toLowerCase() || "").includes(search.toLowerCase()) ||
+      (a.login?.toLowerCase() || "").includes(search.toLowerCase()) ||
+      (a.phone?.toLowerCase() || "").includes(search.toLowerCase()),
   );
 
   function openCreateModal() {
@@ -105,14 +115,15 @@ export default function AdminPage() {
       fullName: admin.fullName,
       login: admin.login,
       phone: admin.phone,
-      role: admin.role,
+      role: admin.role || "driver",
     });
     setEditingId(admin.id);
     onOpen();
   }
 
-  function handleSave() {
-    if (!form.fullName || !form.login || !form.phone) {
+  // Xodim yaratish yoki Yangilash
+  async function handleSave() {
+    if (!form.fullName || !form.phone) {
       toast({
         title: "Barcha majburiy maydonlarni to'ldiring",
         status: "warning",
@@ -121,18 +132,27 @@ export default function AdminPage() {
       return;
     }
 
-    if (editingId) {
-      setAdmins((prev) =>
-        prev.map((a) => (a.id === editingId ? { ...a, ...form } : a)),
-      );
-      toast({ title: "Xodim yangilandi", status: "success", duration: 2000 });
-    } else {
-      const newAdmin = { id: Date.now(), ...form };
-      setAdmins((prev) => [...prev, newAdmin]);
-      toast({ title: "Xodim qo'shildi", status: "success", duration: 2000 });
-    }
+    setIsSubmitting(true);
 
-    onClose();
+    const payload = {
+      full_name: form.fullName,
+      phone: form.phone,
+      role: form.role, // Har doim toza "driver" qiymati ketadi
+    };
+
+    try {
+      if (editingId) {
+        await apiEmployees.Update(editingId, payload);
+      } else {
+        await apiEmployees.Create(payload);
+      }
+      onClose();
+      fetchEmployees();
+    } catch (error) {
+      console.error("Saqlashda xatolik:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function confirmDelete(id) {
@@ -140,10 +160,18 @@ export default function AdminPage() {
     onDeleteOpen();
   }
 
-  function handleDelete() {
-    setAdmins((prev) => prev.filter((a) => a.id !== deleteId));
-    toast({ title: "Xodim o'chirildi", status: "info", duration: 2000 });
-    onDeleteClose();
+  async function handleDelete() {
+    if (!deleteId) return;
+    setIsSubmitting(true);
+    try {
+      await apiEmployees.Delete(deleteId);
+      onDeleteClose();
+      fetchEmployees();
+    } catch (error) {
+      console.error("O'chirishda xatolik:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -161,7 +189,7 @@ export default function AdminPage() {
             Xodimlar
           </Heading>
           <Text color="textSecondary" fontSize="sm" mt={1}>
-            Tizim adminlarini boshqarish
+            Tizim haydovchilarini boshqarish
           </Text>
         </Box>
         <Button
@@ -211,7 +239,11 @@ export default function AdminPage() {
       {/* TABLE CARD */}
       <Card bg="surface" border="1px solid" borderColor="border">
         <CardBody p={0}>
-          {filteredAdmins.length === 0 ? (
+          {loading ? (
+            <Center py={16}>
+              <Spinner color={ACCENT} size="lg" thickness="3px" />
+            </Center>
+          ) : filteredAdmins.length === 0 ? (
             <Flex direction="column" align="center" py={12} color="muted">
               <Users size={40} />
               <Text mt={3} fontSize="sm">
@@ -298,15 +330,14 @@ export default function AdminPage() {
                         {admin.phone}
                       </Td>
                       <Td borderColor="border">
+                        {/* Rol har doim chiroyli ko'rinishi uchun "Haydovchi" deb chiqariladi */}
                         <Badge
                           fontSize="10px"
                           borderRadius="md"
-                          bg={
-                            admin.role === "Bosh admin" ? ACCENT : `${ACCENT}1A`
-                          }
-                          color={admin.role === "Bosh admin" ? "white" : ACCENT}
+                          bg={`${ACCENT}1A`}
+                          color={ACCENT}
                         >
-                          {admin.role}
+                          {admin.role === "driver" ? "Haydovchi" : admin.role}
                         </Badge>
                       </Td>
                       <Td borderColor="border" pr={6}>
@@ -331,7 +362,6 @@ export default function AdminPage() {
                               _hover={{ bg: "dangerBg" }}
                               aria-label="O'chirish"
                               onClick={() => confirmDelete(admin.id)}
-                              isDisabled={admin.role === "Bosh admin"}
                             />
                           </Tooltip>
                         </Flex>
@@ -349,15 +379,16 @@ export default function AdminPage() {
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />
         <ModalContent bg="surface">
-          <ModalHeader color="text">
+          <ModalHeader bg={"surfBlur"} color="text">
             {editingId ? "Xodimni tahrirlash" : "Yangi xodim qo'shish"}
           </ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
+          <ModalBody bg={"bg"}>
             <FormControl mb={4} isRequired>
               <FormLabel fontSize="sm">F.I.Sh</FormLabel>
               <Input
-                placeholder="Masalan: Р.Турсунмурадов"
+                placeholder="Masalan: Doston"
+                bg={"surface"}
                 value={form.fullName}
                 onChange={(e) => setForm({ ...form, fullName: e.target.value })}
               />
@@ -365,7 +396,8 @@ export default function AdminPage() {
             <FormControl mb={4} isRequired>
               <FormLabel fontSize="sm">Login</FormLabel>
               <Input
-                placeholder="Masalan: r.tursunmurodov"
+                bg={"surface"}
+                placeholder="Masalan: doston"
                 value={form.login}
                 onChange={(e) => setForm({ ...form, login: e.target.value })}
               />
@@ -373,24 +405,27 @@ export default function AdminPage() {
             <FormControl mb={4} isRequired>
               <FormLabel fontSize="sm">Telefon</FormLabel>
               <Input
-                placeholder="+998 90 123 45 67"
+                type="number"
+                defaultValue={"+998"}
+                bg={"surface"}
+                placeholder="+998 50 589 07 47"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </FormControl>
             <FormControl mb={2}>
               <FormLabel fontSize="sm">Rol</FormLabel>
+              {/* Qiymati faqat driver bo'lgan Select opsiyasi */}
               <Select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
-                <option value="Admin">Admin</option>
-                <option value="Bosh admin">Bosh admin</option>
+                <option value="driver">Haydovchi (Driver)</option>
               </Select>
             </FormControl>
           </ModalBody>
-          <ModalFooter gap={3}>
-            <Button variant="ghost" onClick={onClose}>
+          <ModalFooter bg={"surfBlur"} gap={3}>
+            <Button variant="ghost" onClick={onClose} isDisabled={isSubmitting}>
               Bekor qilish
             </Button>
             <Button
@@ -399,6 +434,7 @@ export default function AdminPage() {
               _hover={{ bg: "#2563EB" }}
               _active={{ bg: "#1D4ED8" }}
               onClick={handleSave}
+              isLoading={isSubmitting}
             >
               {editingId ? "Saqlash" : "Qo'shish"}
             </Button>
@@ -407,32 +443,46 @@ export default function AdminPage() {
       </Modal>
 
       {/* DELETE CONFIRM DIALOG */}
-      <AlertDialog
-        isOpen={isDeleteOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={onDeleteClose}
-        isCentered
-      >
-        <AlertDialogOverlay>
-          <AlertDialogContent bg="surface">
-            <AlertDialogHeader color="text">
-              Xodimni o'chirish
-            </AlertDialogHeader>
-            <AlertDialogBody color="textSecondary">
-              Rostdan ham bu xodimni o'chirmoqchimisiz? Bu amalni ortga qaytarib
-              bo'lmaydi.
-            </AlertDialogBody>
-            <AlertDialogFooter gap={3}>
-              <Button ref={cancelRef} variant="ghost" onClick={onDeleteClose}>
-                Bekor qilish
-              </Button>
-              <Button variant="solidDanger" onClick={handleDelete}>
-                O'chirish
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
+      {/* DELETE MODAL */}
+      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent bg="surface">
+          <ModalHeader
+            color="text"
+            fontSize="lg"
+            borderBottom="1px solid"
+            borderColor="border"
+          >
+            Xodimni o'chirish
+          </ModalHeader>
+          <ModalCloseButton />
+
+          <ModalBody color="textSecondary" py={6}>
+            Rostdan ham bu xodimni o'chirmoqchimisiz? Bu amalni ortga qaytarib
+            bo'lmaydi.
+          </ModalBody>
+
+          <ModalFooter gap={3} borderTop="1px solid" borderColor="border">
+            <Button
+              variant="ghost"
+              onClick={onDeleteClose}
+              isDisabled={isSubmitting}
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              bg="red.500"
+              color="white"
+              _hover={{ bg: "red.600" }}
+              _active={{ bg: "red.700" }}
+              onClick={handleDelete}
+              isLoading={isSubmitting}
+            >
+              O'chirish
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
