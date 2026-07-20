@@ -183,7 +183,6 @@ function Dashboard() {
         </Badge>
       </Flex>
 
-      {/* STAT CARDS */}
       <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} spacing={5} mb={8}>
         <StatCard
           label="Avtomobillar"
