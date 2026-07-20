@@ -18,7 +18,6 @@ import {
     ChevronLeft,
     ChevronRight,
     LucideLogOut,
-    Globe,
     SunMoon,
     UserCog2,
 } from "lucide-react";
@@ -27,7 +26,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { useAuthStore } from "../../store/authStore";
 import { useUIStore } from "../../store/useUIStore";
-import { useTranslation } from "react-i18next";
+// import { useTranslation } from "react-i18next";
 import LogoutModal from "./LogoutModal";
 
 
@@ -65,12 +64,13 @@ export default function Sidebar({ collapsed, links = [], role, end = false }) {
                 bg="surface"
                 _hover={{ bg: "gray.500", color: "surface" }}
                 color={"text"}
+ 
             >
                 {collapsed ? <ChevronRight /> : <ChevronLeft />}
             </Button>
 
             {/* TOP LINKS */}
-            <VStack align="stretch" spacing={1} mt={10}>
+            <VStack align="stretch" spacing={1} mt={14  }>
                 {links.map((item) => (
                     <NavLink key={item.to} to={item.to} style={{ textDecoration: "none" }} end={item.end}>
                         {({ isActive }) => (

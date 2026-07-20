@@ -18,7 +18,7 @@ export default function AdminLayout() {
     <Box>
       <Sidebar collapsed={collapsed} links={links} role={"SUPER_ADMIN"} />
       <Box
-        pl={collapsed ? "80px" : "250px"}
+        pl={collapsed ? "80px" : "220px"}
         transition="0.25s ease"
         minH="100vh"
       >
