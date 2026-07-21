@@ -38,6 +38,8 @@ export const useAuthStore = create((set, get) => ({
         Cookies.remove("refresh_token");
         Cookies.remove("user_id");
         Cookies.remove("user");
+        Cookies.remove("location_id")
+        Cookies.remove("u_refresh_token")
 
         set({
             token: null,

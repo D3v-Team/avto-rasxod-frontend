@@ -58,46 +58,44 @@ export default function Login() {
         if (Object.keys(newErrors).length > 0) return;
 
 
-        try {
-            const payload = {
-                username: logInput.current.value,
-                password: passInput.current.value
-            }
-            setLoading(true)
-            const res = await Auth.Login(payload);
-            if (res.status == 200 || res.status == 201) {
-                const data = res.data
-                login({
-                    token: data.tokens.access_token,
-                    refreshToken: data.tokens.refresh_token,
-                    user: data.user
-                }
-                );
-                if (data.user.role === "ADMIN") {
-                    navigate("/")
-                    toastService.success("Successfully");
-                } else if (data.user.role === "SUPER_ADMIN") {
-                    navigate("/superadmin/admins");
-                    toastService.success("Successfully, Welocome Boss !")
-                } else if (data.user.role === "seller") {
-                    navigate('/cafe');
-                    toastService.success("Successfully")
-                }
-                else {
-                    toastService.error("Role mos kelmadi")
-                }
-            } else {
-                toastService.error(res?.data?.message || "ok")
-            }
-
-        } catch (err) {
-
-            if (err) { toastService.error(err?.response?.data?.message || "Tizim xatosi") }
-        } finally {
-            setLoading(false)
-        }
-
+       try {
+    const payload = {
+        username: logInput.current.value,
+        password: passInput.current.value,
     };
+
+    setLoading(true);
+
+    const res = await Auth.Login(payload);
+
+    if (res.status !== 200 && res.status !== 201) {
+        toastService.error(res?.data?.message || "Login xatosi");
+        return;
+    }
+
+    const data = res.data;
+
+    login({
+        token: data.tokens.access_token,
+        refreshToken: data.tokens.refresh_token,
+        user: data.user,
+    });
+
+    if (data.user.role !== "super_admin") {
+        toastService.error("Sizda tizimga kirish huquqi yo'q.");
+        return;
+    }
+
+    toastService.success("Welcome Boss!");
+
+    navigate("/admin/dashboard", {
+        replace: true,
+    });
+
+}  finally {
+    setLoading(false);
+}
+    }
 
     return (
         <Flex minH="100vh" align="center" justify="center" bg="bg" px={4}>
