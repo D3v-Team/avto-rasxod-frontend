@@ -148,8 +148,6 @@ export default function AdminPage() {
       }
       onClose();
       fetchEmployees();
-    } catch (error) {
-      console.error("Saqlashda xatolik:", error);
     } finally {
       setIsSubmitting(false);
     }
