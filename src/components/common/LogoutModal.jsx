@@ -1,4 +1,4 @@
-import { useState } from "react";
+
 import {
     Button,
     Modal,
@@ -11,7 +11,6 @@ import {
     useDisclosure,
     Text
 } from "@chakra-ui/react";
-import { useNavigate } from "react-router-dom";
 import { LucideLogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 
@@ -51,7 +50,7 @@ export default function LogoutModal() {
                     </ModalBody>
 
                     <ModalFooter gap={3}>
-                        <Button variant="ghost" onClick={onClose}>
+                        <Button variant="ghost" color={"text"} onClick={onClose}>
                             Bekor qilish
                         </Button>
                         <Button colorScheme="red" onClick={handleLogout}>

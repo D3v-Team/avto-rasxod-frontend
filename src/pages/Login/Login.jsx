@@ -5,11 +5,11 @@ import {
     Text,
     Input,
     Button,
-    useColorMode,
+
     FormControl,
     FormLabel,
     FormErrorMessage,
-    Link,
+
 } from "@chakra-ui/react";
 import { useRef, useState } from "react";
 import { Auth } from "../../Services/api/Auth";
@@ -100,15 +100,15 @@ export default function Login() {
     return (
         <Flex minH="100vh" align="center" justify="center" bg="bg" px={4}>
             {/* Dark/Light toggle button */}
-            {/* <Button
-                position="absolute"
-                top="20px"
-                right="20px"
-                size="sm"
-                onClick={toggleColorMode}
-            >
-                Tema
-            </Button> */}
+                {/* <Button
+                    position="absolute"
+                    top="20px"
+                    right="20px"
+                    size="sm"
+                    onClick={toggleColorMode}
+                >
+                    Tema
+                </Button> */}
             <Box
                 as="form"
                 onSubmit={(e) => handleSubmit(e)}
@@ -119,22 +119,7 @@ export default function Login() {
                 shadow="lg"
             >
                 {/* Logo */}
-                <Flex justify="center" mb={4}>
-                    <Box
-                        w="60px"
-                        h="60px"
-                        bg="blue.500"
-                        rounded="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="white"
-                        fontWeight="bold"
-                        fontSize="md"
-                    >
-                        Cafe
-                    </Box>
-                </Flex>
+               
 
                 {/* Title */}
                 <Heading textAlign="center" size="lg" mb={2} color="text">
@@ -170,17 +155,14 @@ export default function Login() {
                 </FormControl>
 
                 {/* Forgot password */}
-                <Flex justify="flex-end" mb={5}>
-                    <Link color="link" fontSize="sm" href="#">
-                        Parolni unutdingizmi?
-                    </Link>
-                </Flex>
+               
 
                 {/* Login button */}
                 <Button
                     type="submit"
                     style={{ cursor: loading ? "progress" : "pointer" }}
                     w="100%"
+                    mt={"15px"}
                     isLoading={loading}
                     _hover={{ bg: "secondary" }}
                     loadingText="Loading..."

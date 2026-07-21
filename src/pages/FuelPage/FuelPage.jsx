@@ -534,7 +534,7 @@ export default function FuelPage() {
           <ModalHeader
             bg="surfBlur"
             fontSize="lg"
-            color="red.500"
+            color={"text"}
             borderTopRadius="xl"
           >
             O'chirishni tasdiqlang
