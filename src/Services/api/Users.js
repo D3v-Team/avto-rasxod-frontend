@@ -1,26 +1,52 @@
-import { $api } from "../parametres/axios";
-import { BASE_URL } from "../parametres/axios";
-class apiUsers {
-    static getUser = async (id) => {
-        const response = await $api.get(`${BASE_URL}/user/${id}`)
-        return response;
-    }
-    // static Add = async (data) => {
-    //     const response = await $api.post(`${BASE_URL}/user`, data, { showSuccessToast: "User successfully created" })
-    //     return response;
-    // }
-    // static Update = async (data, id) => {
-    //     const response = await $api.put(`${BASE_URL}/user/${id}`, data, { showSuccessToast: "User successfully updated" })
-    //     return response;
-    // }
-    // static Delete = async (id) => {
-    //     const response = await $api.delete(`${BASE_URL}/user/${id}`, { showSuccessToast: "User successfully deleted" })
-    //     return response;
-    // }
-    static ResetPassword = async (id, data) => {
-        const response = await $api.post(`${BASE_URL}/user/reset-password/${id}`, data, { showSuccessToast: "Password successfully changed" });
-        return response
-    }
+import { $api, BASE_URL } from "../parametres/axios";
+
+class apiEmployees {
+  // Barcha xodimlarni olish
+  static All = async () => {
+    const response = await $api.get(`${BASE_URL}/employees`);
+    return response;
+  };
+
+  // Bitta xodim
+  static One = async (id) => {
+    const response = await $api.get(`${BASE_URL}/employees/${id}`);
+    return response;
+  };
+
+  // Xodim qo'shish
+  static Create = async (data) => {
+    const response = await $api.post(
+      `${BASE_URL}/employees`,
+      data,
+      {
+        showSuccessToast: "Employee successfully created",
+      }
+    );
+    return response;
+  };
+
+  // Xodimni yangilash
+  static Update = async (id, data) => {
+    const response = await $api.patch(
+      `${BASE_URL}/employees/${id}`,
+      data,
+      {
+        showSuccessToast: "Employee successfully updated",
+      }
+    );
+    return response;
+  };
+
+  // Xodimni o'chirish
+  static Delete = async (id) => {
+    const response = await $api.delete(
+      `${BASE_URL}/employees/${id}`,
+      {
+        showSuccessToast: "Employee successfully deleted",
+      }
+    );
+    return response;
+  };
 }
 
-export { apiUsers };
+export { apiEmployees };
