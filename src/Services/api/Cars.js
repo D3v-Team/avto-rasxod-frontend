@@ -1,7 +1,10 @@
 import { $api, BASE_URL } from "../parametres/axios";
 
 class apiCars {
-  // Barcha mashinalar
+  /* ==========================
+        CARS
+  ========================== */
+
   static All = async (
     page = 1,
     limit = 10,
@@ -12,10 +15,7 @@ class apiCars {
     sortBy = "",
     sortOrder = ""
   ) => {
-    const params = {
-      page,
-      limit,
-    };
+    const params = { page, limit };
 
     if (search) params.search = search;
     if (is_active !== undefined && is_active !== null)
@@ -26,20 +26,15 @@ class apiCars {
     if (sortBy) params.sortBy = sortBy;
     if (sortOrder) params.sortOrder = sortOrder;
 
-    const response = await $api.get(`${BASE_URL}/cars`, {
-      params,
-    });
-
+    const response = await $api.get(`${BASE_URL}/cars`, { params });
     return response;
   };
 
-  // Bitta mashina
   static One = async (id) => {
     const response = await $api.get(`${BASE_URL}/cars/${id}`);
     return response;
   };
 
-  // Mashina qo'shish
   static Create = async (data) => {
     const response = await $api.post(
       `${BASE_URL}/cars`,
@@ -52,7 +47,6 @@ class apiCars {
     return response;
   };
 
-  // Mashinani yangilash
   static Update = async (id, data) => {
     const response = await $api.patch(
       `${BASE_URL}/cars/${id}`,
@@ -65,12 +59,83 @@ class apiCars {
     return response;
   };
 
-  // Mashinani o'chirish
   static Delete = async (id) => {
     const response = await $api.delete(
       `${BASE_URL}/cars/${id}`,
       {
         showSuccessToast: "Car successfully deleted",
+      }
+    );
+
+    return response;
+  };
+
+  /* ==========================
+        CAR FUEL NORMS
+  ========================== */
+
+  static AllNorms = async (
+    page = 1,
+    limit = 10,
+    car_id = "",
+    fuel_id = "",
+    search = "",
+    sortBy = "",
+    sortOrder = ""
+  ) => {
+    const params = { page, limit };
+
+    if (car_id) params.car_id = car_id;
+    if (fuel_id) params.fuel_id = fuel_id;
+    if (search) params.search = search;
+    if (sortBy) params.sortBy = sortBy;
+    if (sortOrder) params.sortOrder = sortOrder;
+
+    const response = await $api.get(
+      `${BASE_URL}/car-fuel-norms`,
+      { params }
+    );
+
+    return response;
+  };
+
+  static OneNorm = async (id) => {
+    const response = await $api.get(
+      `${BASE_URL}/car-fuel-norms/${id}`
+    );
+
+    return response;
+  };
+
+  static CreateNorm = async (data) => {
+    const response = await $api.post(
+      `${BASE_URL}/car-fuel-norms`,
+      data,
+      {
+        showSuccessToast: "Fuel norm successfully created",
+      }
+    );
+
+    return response;
+  };
+
+  static UpdateNorm = async (id, data) => {
+    const response = await $api.patch(
+      `${BASE_URL}/car-fuel-norms/${id}`,
+      data,
+      {
+        showSuccessToast: "Fuel norm successfully updated",
+      }
+    );
+
+    return response;
+  };
+
+  static DeleteNorm = async (id) => {
+    const response = await $api.delete(
+      `${BASE_URL}/car-fuel-norms/${id}`,
+      {
+        showSuccessToast: "Fuel norm successfully deleted",
       }
     );
 
