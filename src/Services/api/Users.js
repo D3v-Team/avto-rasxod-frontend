@@ -7,6 +7,18 @@ class apiEmployees {
     return response;
   };
 
+  // 🟢 YANGI METOD: Rol, searchTerm, page va limit bo'yicha filterlab olish
+  static Filter = async (role = "", searchTerm = "", page = 1, limit = 100) => {
+    const params = {};
+    if (role) params.role = role;
+    if (searchTerm) params.searchTerm = searchTerm;
+    if (page) params.page = page;
+    if (limit) params.limit = limit;
+
+    const response = await $api.get(`${BASE_URL}/employees/filter`, { params });
+    return response;
+  };
+
   // Bitta xodim
   static One = async (id) => {
     const response = await $api.get(`${BASE_URL}/employees/${id}`);
