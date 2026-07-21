@@ -679,6 +679,8 @@ export default function CarPage() {
                   color="text"
                   borderColor="border"
                   focusBorderColor="primary"
+                  textTransform={"uppercase"}
+                  maxLength={6}
                   _hover={{ borderColor: ACCENT }}
                   value={formData.plate_number}
                   onChange={handleChange}
