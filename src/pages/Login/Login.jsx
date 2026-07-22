@@ -1,15 +1,14 @@
 import {
-    Box,
-    Flex,
-    Heading,
-    Text,
-    Input,
-    Button,
-
-    FormControl,
-    FormLabel,
-    FormErrorMessage,
-
+  Box,
+  Flex,
+  Heading,
+  Text,
+  Input,
+  Button,
+  FormControl,
+  FormLabel,
+  FormErrorMessage,
+  Image,
 } from "@chakra-ui/react";
 import { useRef, useState } from "react";
 import { Auth } from "../../Services/api/Auth";
@@ -17,160 +16,228 @@ import { useAuth } from "../../hooks/useAuth";
 import { toastService } from "../../utils/toast";
 import { useNavigate } from "react-router";
 
+
 export default function Login() {
-    const { login } = useAuth();
-    const navigate = useNavigate();
-    // UI states
-    const [loading, setLoading] = useState(false)
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  // UI states
+  const [loading, setLoading] = useState(false);
 
-    const passInput = useRef("");
-    const logInput = useRef("");
+  const passInput = useRef("");
+  const logInput = useRef("");
 
-    const [errors, setErrors] = useState({ login: "", password: "" });
+  const [errors, setErrors] = useState({ login: "", password: "" });
 
-    // ❗ Input o'zgarsa error avtomatik tozalanadi
-    const clearError = (field) => {
-        setErrors((prev) => ({ ...prev, [field]: "" }));
-    };
+  // ❗ Input o'zgarsa error avtomatik tozalanadi
+  const clearError = (field) => {
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        const loginText = logInput.current.value.trim();
-        const password = passInput.current.value.trim();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const loginText = logInput.current.value.trim();
+    const password = passInput.current.value.trim();
 
-        let newErrors = {};
+    let newErrors = {};
 
-        // Login validation
-        if (!loginText) {
-            newErrors.login = "Login kiritilmadi";
-        }
-
-        // Password validation
-        if (!password) {
-            newErrors.password = "Parol kiritilmadi";
-        } else if (password.length < 6) {
-            newErrors.password = "Parol kamida 6 belgidan iborat bo'lishi kerak";
-        }
-
-        setErrors(newErrors);
-
-        // Agar hatolik bo'lsa API chaqirilmaydi
-        if (Object.keys(newErrors).length > 0) return;
-
-
-       try {
-    const payload = {
-        username: logInput.current.value,
-        password: passInput.current.value,
-    };
-
-    setLoading(true);
-
-    const res = await Auth.Login(payload);
-
-    if (res.status !== 200 && res.status !== 201) {
-        toastService.error(res?.data?.message || "Login xatosi");
-        return;
+    // Login validation
+    if (!loginText) {
+      newErrors.login = "Login kiritilmadi";
     }
 
-    const data = res.data;
+    // Password validation
+    if (!password) {
+      newErrors.password = "Parol kiritilmadi";
+    } else if (password.length < 6) {
+      newErrors.password = "Parol kamida 6 belgidan iborat bo'lishi kerak";
+    }
 
-    login({
+    setErrors(newErrors);
+
+    // Agar hatolik bo'lsa API chaqirilmaydi
+    if (Object.keys(newErrors).length > 0) return;
+
+    try {
+      const payload = {
+        username: logInput.current.value,
+        password: passInput.current.value,
+      };
+
+      setLoading(true);
+
+      const res = await Auth.Login(payload);
+
+      if (res.status !== 200 && res.status !== 201) {
+        toastService.error(res?.data?.message || "Login xatosi");
+        return;
+      }
+
+      const data = res.data;
+
+      login({
         token: data.tokens.access_token,
         refreshToken: data.tokens.refresh_token,
         user: data.user,
-    });
+      });
 
-    if (data.user.role !== "super_admin") {
+      if (data.user.role !== "super_admin" && data.user.role !== "admin") {
         toastService.error("Sizda tizimga kirish huquqi yo'q.");
         return;
+      }
+
+      toastService.success("Welcome Boss!");
+
+      if (data.user.role === "super_admin") {
+        navigate("/admin/dashboard", { replace: true });
+      } else {
+        navigate("/xodim/dashboard", { replace: true });
+      }
+    } finally {
+      setLoading(false);
     }
+  };
 
-    toastService.success("Welcome Boss!");
+  return (
+    <Flex minH="100vh" w="100vw" overflow="hidden" bg="bg">
 
-    navigate("/admin/dashboard", {
-        replace: true,
-    });
+      <Box
+        display={{ base: "none", md: "block" }}
+        w={{ md: "50%", lg: "55%", xl: "60%" }}
+        h="100vh"
+        position="relative"
+      >
+        <Image
+          src="/public/img/login.png" 
+          alt="Login Banner"
+          w="100%"
+          h="100%"
+          objectFit="cover"
+        />
 
-}  finally {
-    setLoading(false);
-}
-    }
+        <Box
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          bgGradient="linear(to-t, blackAlpha.800, transparent)"
+          display="flex"
+          alignItems="flex-end"
+          p={12}
+        >
+          <Box color="white">
+            <Heading size="xl" mb={3} fontWeight="bold">
+             Avto Rasxod Tizimi
+            </Heading>
+            <Text fontSize="lg" opacity={0.85}>
+              Barcha xarajatlar va hisobotlarni qulay boshqaring
+            </Text>
+          </Box>
+        </Box>
+      </Box>
 
-    return (
-        <Flex minH="100vh" align="center" justify="center" bg="bg" px={4}>
-            {/* Dark/Light toggle button */}
-                {/* <Button
-                    position="absolute"
-                    top="20px"
-                    right="20px"
-                    size="sm"
-                    onClick={toggleColorMode}
-                >
-                    Tema
-                </Button> */}
-            <Box
-                as="form"
-                onSubmit={(e) => handleSubmit(e)}
-                w={{ base: "100%", sm: "400px" }}
-                bg="surface"
-                p={8}
-                rounded="xl"
-                shadow="lg"
-            >
-                {/* Logo */}
-               
 
-                {/* Title */}
-                <Heading textAlign="center" size="lg" mb={2} color="text">
-                    Login
-                </Heading>
+     <Flex
+  w={{ base: "100%", md: "50%", lg: "45%", xl: "40%" }}
+  h="100vh"
+  align="center"
+  justify="center"
+  p={{ base: 6, sm: 10, md: 12 }}
+  bg="surface"
+>
+  <Box
+    as="form"
+    onSubmit={handleSubmit}
+    w="100%"
+    maxW="400px"
+  >
+    {/* Sarlavha qismi (Rasmiy va zamonaviy) */}
+    <Box mb={8}>
+      <Heading size="lg" mb={2} color="text" fontWeight="700" letterSpacing="-0.5px">
+        Tizimga kirish
+      </Heading>
+      <Text color="textSecondary" fontSize="sm" opacity={0.8}>
+        Davom etish uchun hisobingizga kiring
+      </Text>
+    </Box>
 
-                {/* Subtitle */}
-                <Text textAlign="center" color="gray.500" mb={6}>
-                    Tizimga kirish uchun ma’lumotlarni kiriting
-                </Text>
+    {/* Login input */}
+    <FormControl mb={5} isInvalid={!!errors.login}>
+      <FormLabel color="text" fontSize="xs" fontWeight="600" textTransform="uppercase" letterSpacing="0.5px">
+        Login
+      </FormLabel>
+      <Input
+        ref={logInput}
+        placeholder="Loginni kiriting"
+        onChange={() => clearError("login")}
+        size="lg"
+        borderRadius="xl"
+        bg="bg"
+        borderColor="border"
+        fontSize="sm"
+        _hover={{ borderColor: "primary" }}
+        _focus={{
+          borderColor: "primary",
+          boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.15)",
+          bg: "surface",
+        }}
+        transition="all 0.2s ease"
+      />
+      <FormErrorMessage fontSize="xs">{errors.login}</FormErrorMessage>
+    </FormControl>
 
-                {/* Login input */}
-                <FormControl mb={4} isInvalid={!!errors.login}>
-                    <FormLabel color="text">Login</FormLabel>
-                    <Input
-                        ref={logInput}
-                        placeholder="Loginni kiriting"
-                        onChange={() => clearError("login")}
-                    />
-                    <FormErrorMessage>{errors.login}</FormErrorMessage>
-                </FormControl>
+    {/* Password input */}
+    <FormControl mb={6} isInvalid={!!errors.password}>
+      <FormLabel color="text" fontSize="xs" fontWeight="600" textTransform="uppercase" letterSpacing="0.5px">
+        Parol
+      </FormLabel>
+      <Input
+        ref={passInput}
+        type="password"
+        placeholder="••••••••"
+        onChange={() => clearError("password")}
+        size="lg"
+        borderRadius="xl"
+        bg="bg"
+        borderColor="border"
+        fontSize="sm"
+        _hover={{ borderColor: "primary" }}
+        _focus={{
+          borderColor: "primary",
+          boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.15)",
+          bg: "surface",
+        }}
+        transition="all 0.2s ease"
+      />
+      <FormErrorMessage fontSize="xs">{errors.password}</FormErrorMessage>
+    </FormControl>
 
-                {/* Password input */}
-                <FormControl mb={2} isInvalid={!!errors.password}>
-                    <FormLabel color="text">Parol</FormLabel>
-                    <Input
-                        ref={passInput}
-                        type="password"
-                        placeholder="Parolni kiriting"
-                        onChange={() => clearError("password")}
-                    />
-                    <FormErrorMessage>{errors.password}</FormErrorMessage>
-                </FormControl>
+    {/* Login button */}
+    <Button
+      type="submit"
+      w="100%"
+      h="48px"
+      isLoading={loading}
+      loadingText="Kirilmoqda..."
+      variant="solidPrimary"
+      fontSize="sm"
+      fontWeight="600"
+      borderRadius="xl"
+      boxShadow="sm"
+      _hover={{
+        transform: "translateY(-1px)",
+        boxShadow: "md",
+      }}
+      _active={{
+        transform: "translateY(0)",
+      }}
+      transition="all 0.15s ease"
+    >
+      Tizimga kirish
+    </Button>
+  </Box>
+</Flex>
 
-                {/* Forgot password */}
-               
-
-                {/* Login button */}
-                <Button
-                    type="submit"
-                    style={{ cursor: loading ? "progress" : "pointer" }}
-                    w="100%"
-                    mt={"15px"}
-                    isLoading={loading}
-                    _hover={{ bg: "secondary" }}
-                    loadingText="Loading..."
-                    variant="solidPrimary"
-                >
-                    Kirish
-                </Button>
-            </Box>
-        </Flex>
-    );
+    </Flex>
+  );
 }
