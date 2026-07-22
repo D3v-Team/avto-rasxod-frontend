@@ -49,6 +49,7 @@ const getFuelTheme = (name) => {
   if (t.includes("benzin") || t.includes("ai")) return { token: "orange.400" };
   if (t.includes("metan") || t.includes("gaz")) return { token: "cyan.400" };
   if (t.includes("propan")) return { token: "purple.400" };
+  if (t.includes("Elektr")) return { token: "blue.300" };
   return { token: "teal.400" };
 };
 
@@ -436,6 +437,7 @@ export default function FuelPage() {
                   <option value="AI-95">AI-95</option>
                   <option value="AI-98">AI-98</option>
                   <option value="AI-100">AI-100</option>
+                  <option value="Elektr">Elektr</option>
                   <option value="Metan">Metan</option>
                   <option value="Propan">Propan</option>
                   <option value="Dizel">Dizel</option>

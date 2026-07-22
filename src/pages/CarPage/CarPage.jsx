@@ -29,7 +29,6 @@ import {
   FormLabel,
   Select,
   useDisclosure,
-  useToast,
   Tooltip,
   Spinner,
   Center,
@@ -57,7 +56,7 @@ const initialFormState = {
   plate_number: "",
   responsible_employee_id: "",
   driver_id: "",
-  speedometer: 0,
+  speedometer: "",
   is_active: true,
 };
 
@@ -100,8 +99,6 @@ export default function CarPage() {
     onOpen: onNormOpen,
     onClose: onNormClose,
   } = useDisclosure();
-
-  const toast = useToast();
 
   // Backend javobi { data: { pagination, records } } yoki { data: [...] } bo'lishi mumkin.
   // Shu funksiya qaysi formatda kelishidan qat'iy nazar har doim massiv qaytaradi.
@@ -188,6 +185,7 @@ export default function CarPage() {
             typeof car.responsible_employee === "object"
               ? car.responsible_employee.id
               : car.responsible_employee_id || "",
+
           speedometer: Number(car.speedometer || 0),
           is_active:
             car.is_active !== undefined ? Boolean(car.is_active) : true,
@@ -197,12 +195,6 @@ export default function CarPage() {
       setCars(mappedCars);
     } catch (error) {
       console.error("Avtomobillarni yuklashda xatolik:", error);
-      toast({
-        title: "Ma'lumotlarni yuklab bo'lmadi",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
     } finally {
       setLoading(false);
     }
@@ -225,12 +217,7 @@ export default function CarPage() {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : name === "speedometer"
-            ? Number(value)
-            : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -247,7 +234,7 @@ export default function CarPage() {
       plate_number: car.plate_number || "",
       responsible_employee_id: car.responsible_employee_id || "",
       driver_id: car.driver_id || "",
-      speedometer: car.speedometer || 0,
+      speedometer: car.speedometer || "",
       is_active: car.is_active ?? true,
     });
     onFormOpen();
@@ -257,12 +244,6 @@ export default function CarPage() {
     e.preventDefault();
 
     if (!formData.name.trim() || !formData.plate_number.trim()) {
-      toast({
-        title: "Avtomobil nomi va davlat raqamini kiriting",
-        status: "warning",
-        duration: 2500,
-        isClosable: true,
-      });
       return;
     }
 
@@ -273,7 +254,7 @@ export default function CarPage() {
       plate_number: formData.plate_number,
       responsible_employee_id: formData.responsible_employee_id || null,
       driver_id: formData.driver_id || null,
-      speedometer: Number(formData.speedometer) || 0,
+      speedometer: Number(formData.speedometer) || "",
       is_active: Boolean(formData.is_active),
     };
 
@@ -308,12 +289,6 @@ export default function CarPage() {
     e.preventDefault();
 
     if (!normFormData.fuel_id || !normFormData.norm_per_100km) {
-      toast({
-        title: "Yonilg'i turi va normani kiriting",
-        status: "warning",
-        duration: 2500,
-        isClosable: true,
-      });
       return;
     }
 
@@ -956,7 +931,7 @@ export default function CarPage() {
                   fontWeight="medium"
                   color="textSecondary"
                 >
-                  100 km uchun norma (Litr / Kub)
+                  100 km uchun norma (Litr / Kub / KW)
                 </FormLabel>
                 <Input
                   type="number"
