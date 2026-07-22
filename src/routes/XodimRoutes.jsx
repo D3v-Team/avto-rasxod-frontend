@@ -1,20 +1,13 @@
 import Dashboard from "../pages/Dashboard/Dashboard";
-import AdminPage from "../pages/AdminPage/AdminPage";
 import FuelPage from "../pages/FuelPage/FuelPage";
 import CarPage from "../pages/CarPage/CarPage";
 import CostPage from "../pages/CostPage/CostPage";
-import Admin from "../pages/AdminPage/Adminlar/Admin";
 
-const superAdminRoutes = [
+const xodimRoutes = [
   {
     name: "dashboard",
     path: "dashboard",
     element: <Dashboard />,
-  },
-  {
-    name: "admins",
-    path: "admins",
-    element: <AdminPage />,
   },
   {
     name: "cars",
@@ -31,10 +24,5 @@ const superAdminRoutes = [
     path: "costs",
     element: <CostPage />,
   },
-  {
-    name: "admin",
-    path: "admin",
-    element: <Admin />,
-  },
 ];
-export default superAdminRoutes;
+export default xodimRoutes;

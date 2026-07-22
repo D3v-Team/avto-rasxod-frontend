@@ -2,7 +2,7 @@ import { Outlet } from "react-router";
 import Sidebar from "../components/common/Sidebar";
 import { Box } from "@chakra-ui/react";
 import { useUIStore } from "../store/useUIStore";
-import { Car, Fuel, HomeIcon, Users, Wallet2 } from "lucide-react";
+import { Car, Fuel, HomeIcon, User, Users, Wallet2 } from "lucide-react";
 
 const links = [
   { label: "Bosh sahifa", to: "/admin/dashboard", icon: HomeIcon },
@@ -10,6 +10,7 @@ const links = [
   { label: "Avtomobillar", to: "/admin/cars", icon: Car },
   { label: "Xodimlar", to: "/admin/admins", icon: Users },
   { label: "Yoqilg'i", to: "/admin/fuel", icon: Fuel },
+  { label: "Adminlar", to: "/admin/admin", icon: User },
 ];
 
 export default function AdminLayout() {
