@@ -44,6 +44,7 @@ import {
   Car as CarIcon,
   Gauge,
   Fuel,
+  Zap,
 } from "lucide-react";
 import { apiCars } from "../../Services/api/Cars";
 import { apiEmployees } from "../../Services/api/Users";
@@ -51,12 +52,49 @@ import { apiFuel } from "../../Services/api/Fuels";
 
 const ACCENT = "#3B82F6";
 
+// 🔋 Backend hozircha is_electric maydonini qaytarmaydi/saqlamaydi,
+// shu sababli buni frontendda localStorage orqali saqlab turamiz.
+const ELECTRIC_STORAGE_KEY = "car_electric_status_map";
+
+const getElectricMap = () => {
+  try {
+    const raw = localStorage.getItem(ELECTRIC_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    console.error("Elektromobil holatini o'qishda xatolik:", error);
+    return {};
+  }
+};
+
+const setElectricStatus = (carId, isElectric) => {
+  if (!carId) return;
+  try {
+    const map = getElectricMap();
+    map[carId] = Boolean(isElectric);
+    localStorage.setItem(ELECTRIC_STORAGE_KEY, JSON.stringify(map));
+  } catch (error) {
+    console.error("Elektromobil holatini saqlashda xatolik:", error);
+  }
+};
+
+const removeElectricStatus = (carId) => {
+  if (!carId) return;
+  try {
+    const map = getElectricMap();
+    delete map[carId];
+    localStorage.setItem(ELECTRIC_STORAGE_KEY, JSON.stringify(map));
+  } catch (error) {
+    console.error("Elektromobil holatini o'chirishda xatolik:", error);
+  }
+};
+
 const initialFormState = {
   name: "",
   plate_number: "",
   responsible_employee_id: "",
   driver_id: "",
   speedometer: "",
+  is_electric: false, // ⚡ ELEKTROMOBIL BAYROQCHASI
   is_active: true,
 };
 
@@ -70,7 +108,7 @@ export default function CarPage() {
   const [cars, setCars] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [responsibles, setResponsibles] = useState([]);
-  const [fuels, setFuels] = useState([]); // Yonilg'i turlari
+  const [fuels, setFuels] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,7 +119,6 @@ export default function CarPage() {
   const [selectedCarId, setSelectedCarId] = useState(null);
   const [carToDelete, setCarToDelete] = useState(null);
 
-  // Modallar disclosure
   const {
     isOpen: isFormOpen,
     onOpen: onFormOpen,
@@ -100,8 +137,6 @@ export default function CarPage() {
     onClose: onNormClose,
   } = useDisclosure();
 
-  // Backend javobi { data: { pagination, records } } yoki { data: [...] } bo'lishi mumkin.
-  // Shu funksiya qaysi formatda kelishidan qat'iy nazar har doim massiv qaytaradi.
   const extractRecords = (res) => {
     const payload = res?.data;
     if (Array.isArray(payload)) return payload;
@@ -111,7 +146,6 @@ export default function CarPage() {
     return [];
   };
 
-  // 1. Xodimlarni role bo'yicha yuklash
   const fetchEmployeesByRole = async () => {
     try {
       const [driversRes, responsiblesRes] = await Promise.all([
@@ -128,7 +162,6 @@ export default function CarPage() {
     }
   };
 
-  // 2. Yonilg'i turlarini yuklash (Norma modal uchun)
   const fetchFuels = async () => {
     try {
       const res = await apiFuel.All(1, 100);
@@ -139,12 +172,12 @@ export default function CarPage() {
     }
   };
 
-  // 3. Avtomobillar ro'yxatini yuklash
   const fetchCars = async () => {
     setLoading(true);
     try {
       const res = await apiCars.All(1, 100, search);
       const rawData = extractRecords(res);
+      const electricMap = getElectricMap();
 
       const mappedCars = rawData.map((car) => {
         let driverName = "Biriktirilmagan";
@@ -170,6 +203,14 @@ export default function CarPage() {
           responsibleName = car.responsible_employee;
         }
 
+        // Backend is_electric ni qaytarmasa ham, localStorage'da saqlangan
+        // qiymat bo'lsa o'shani ustuvor qilib olamiz.
+        const localElectric = electricMap[car.id];
+        const isElectric =
+          localElectric !== undefined
+            ? Boolean(localElectric)
+            : Boolean(car.is_electric);
+
         return {
           id: car.id,
           name: car.name || car.car_name || "Nomsiz transport",
@@ -187,6 +228,7 @@ export default function CarPage() {
               : car.responsible_employee_id || "",
 
           speedometer: Number(car.speedometer || 0),
+          is_electric: isElectric, // Elektromobil statusi (local + backend)
           is_active:
             car.is_active !== undefined ? Boolean(car.is_active) : true,
         };
@@ -212,7 +254,6 @@ export default function CarPage() {
     return () => clearTimeout(delayDebounce);
   }, [search]);
 
-  // Form handling
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -235,6 +276,7 @@ export default function CarPage() {
       responsible_employee_id: car.responsible_employee_id || "",
       driver_id: car.driver_id || "",
       speedometer: car.speedometer || "",
+      is_electric: Boolean(car.is_electric),
       is_active: car.is_active ?? true,
     });
     onFormOpen();
@@ -254,15 +296,29 @@ export default function CarPage() {
       plate_number: formData.plate_number,
       responsible_employee_id: formData.responsible_employee_id || null,
       driver_id: formData.driver_id || null,
-      speedometer: Number(formData.speedometer) || "",
+      speedometer: Number(formData.speedometer) || 0,
+      is_electric: Boolean(formData.is_electric),
       is_active: Boolean(formData.is_active),
     };
 
     try {
       if (selectedCarId) {
         await apiCars.Update(selectedCarId, payload);
+        // Backend is_electric ni saqlamasa ham, frontendda holatni saqlaymiz
+        setElectricStatus(selectedCarId, formData.is_electric);
       } else {
-        await apiCars.Create(payload);
+        const createRes = await apiCars.Create(payload);
+        // Yangi yaratilgan avtomobil id sini turli mumkin bo'lgan
+        // javob strukturalaridan topishga harakat qilamiz
+        const newCarId =
+          createRes?.data?.id ??
+          createRes?.data?.data?.id ??
+          createRes?.data?.record?.id ??
+          createRes?.data?.data?.record?.id;
+
+        if (newCarId) {
+          setElectricStatus(newCarId, formData.is_electric);
+        }
       }
       onFormClose();
       fetchCars();
@@ -273,7 +329,6 @@ export default function CarPage() {
     }
   };
 
-  // 🟢 NORMA O'RNATISH MODALINI OCHISH
   const handleOpenNormModal = (car) => {
     setSelectedCar(car);
     setNormFormData({
@@ -284,7 +339,6 @@ export default function CarPage() {
     onNormOpen();
   };
 
-  // 🟢 NORMA NI SAQLASH
   const handleNormSubmit = async (e) => {
     e.preventDefault();
 
@@ -320,6 +374,7 @@ export default function CarPage() {
     setIsSubmitting(true);
     try {
       await apiCars.Delete(carToDelete.id);
+      removeElectricStatus(carToDelete.id);
       onDeleteClose();
       fetchCars();
     } catch (error) {
@@ -327,6 +382,19 @@ export default function CarPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // 🔢 Davlat raqamini "20 | 200 DAV" ko'rinishida (raqam va harflar orasida bo'sh joy bilan) formatlaydi
+  const formatPlateNumber = (plate) => {
+    if (!plate) return { region: "01", main: "" };
+    const clean = plate.replace(/\s+/g, "").toUpperCase();
+    const region = clean.slice(0, 2);
+    const rest = clean.slice(2);
+    const formattedMain = rest
+      .replace(/(\d+)([A-Z]+)/g, "$1 $2")
+      .replace(/([A-Z]+)(\d+)/g, "$1 $2");
+
+    return { region, main: formattedMain };
   };
 
   return (
@@ -432,7 +500,7 @@ export default function CarPage() {
                     opacity={0.3}
                     color="var(--chakra-colors-textSecondary)"
                   />
-                  <Text color="textSecondary" fontSize="md">
+                  <Text color="text" fontSize="md">
                     Avtomobil topilmadi
                   </Text>
                 </VStack>
@@ -443,7 +511,7 @@ export default function CarPage() {
                   <Thead>
                     <Tr bg="surfBlur">
                       <Th
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -453,7 +521,7 @@ export default function CarPage() {
                         Avtomobil nomi
                       </Th>
                       <Th
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -461,7 +529,7 @@ export default function CarPage() {
                         Davlat raqami
                       </Th>
                       <Th
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -469,7 +537,7 @@ export default function CarPage() {
                         Haydovchi
                       </Th>
                       <Th
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -477,7 +545,7 @@ export default function CarPage() {
                         Mas'ul xodim
                       </Th>
                       <Th
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -485,7 +553,7 @@ export default function CarPage() {
                         Speedometer
                       </Th>
                       <Th
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -494,7 +562,7 @@ export default function CarPage() {
                       </Th>
                       <Th
                         textAlign="center"
-                        color="textSecondary"
+                        color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
@@ -508,136 +576,267 @@ export default function CarPage() {
                     {cars.map((car) => (
                       <Tr
                         key={car.id}
-                        transition="background 0.15s ease"
-                        _hover={{ bg: "blackAlpha.50" }}
+                        transition="all 0.2s ease"
+                        _hover={{
+                          bg: "blackAlpha.50",
+                          transform: "translateY(-1px)",
+                        }}
                       >
-                        <Td borderColor="border" pl={6} py={3.5}>
+                        {/* 1. Avtomobil Nomi va Jonli Icon */}
+                        <Td borderColor="border" pl={6} py={4}>
                           <HStack spacing={3}>
-                            <Center p={2} borderRadius="lg" bg={`${ACCENT}1A`}>
-                              <CarIcon size={18} color={ACCENT} />
+                            <Center
+                              w="38px"
+                              h="38px"
+                              borderRadius="xl"
+                              bgGradient={`linear(to-br, ${car.is_electric ? "#10B98120" : ACCENT + "20"}, ${car.is_electric ? "#10B98108" : ACCENT + "08"})`}
+                              border="1px solid"
+                              borderColor={
+                                car.is_electric ? "#10B98130" : `${ACCENT}30`
+                              }
+                              boxShadow={`0 2px 8px ${car.is_electric ? "#10B98120" : ACCENT + "20"}`}
+                              color={car.is_electric ? "green.500" : ACCENT}
+                              transition="all 0.2s"
+                              _hover={{ transform: "scale(1.05)" }}
+                            >
+                              <CarIcon size={20} strokeWidth={2.2} />
                             </Center>
-                            <Text fontWeight="600" color="text">
-                              {car.name}
-                            </Text>
+                            <VStack align="start" spacing={0}>
+                              <HStack spacing={1.5}>
+                                <Text
+                                  fontWeight="600"
+                                  color="text"
+                                  fontSize="sm"
+                                >
+                                  {car.name}
+                                </Text>
+                               
+                              </HStack>
+                              <Text fontSize="xs" color="textSecondary">
+                                Transport
+                              </Text>
+                            </VStack>
                           </HStack>
                         </Td>
 
+                      
+<Td>
+  <Flex
+    align="center"
+    bg="white"
+    color="black"
+    border="1.5px solid #000"
+    borderRadius="lg"
+    overflow="hidden"
+    h="32px"
+    w="fit-content"
+    userSelect="none"
+  >
+    {/* 1. Viloyat kodi (is_electric bo'lsa YASHIL, aks holda OQ) */}
+    <Center
+      bg={car.is_electric ? "#70C837" : "white"}
+      px={2}
+      h="100%"
+    >
+      <Text
+        fontWeight="800"
+        fontSize="xs"
+        lineHeight="1"
+        fontFamily="monospace"
+        color="black"
+      >
+        {formatPlateNumber(car.plate_number).region}
+      </Text>
+    </Center>
+
+    {/* Tik ajratuvchi chiziq */}
+    <Box w="1.5px" bg="#000" alignSelf="stretch" />
+
+    {/* 2. Asosiy Raqam qismi (raqam va harflar orasida bo'sh joy bilan) */}
+    <Center px={2.5} h="100%">
+      <Text
+        fontWeight="800"
+        fontSize="xs"
+        fontFamily="monospace"
+        letterSpacing="1px"
+        textTransform="uppercase"
+        color="black"
+        whiteSpace="pre"
+      >
+        {formatPlateNumber(car.plate_number).main}
+      </Text>
+    </Center>
+
+    {/* 3. Bayroqcha va UZ */}
+    <VStack spacing={0} align="center" pl={0.5} pr={1.5} justify="center">
+      <Text fontSize="9px" lineHeight="1">
+        🇺🇿
+      </Text>
+      <Text
+        fontSize="6.5px"
+        fontWeight="900"
+        color="#0033A0"
+        lineHeight="1"
+        mt="1px"
+      >
+        UZ
+      </Text>
+    </VStack>
+  </Flex>
+</Td>
+
+
+                        {/* 3. Haydovchi */}
                         <Td borderColor="border">
-                          <Badge
-                            variant="outline"
-                            borderColor="border"
-                            color="text"
+                          <Text color="text" fontSize="sm" fontWeight="500">
+                            {car.driver_name}
+                          </Text>
+                        </Td>
+
+                        {/* 4. Mas'ul Xodim */}
+                        <Td borderColor="border">
+                          <Text color="textSecondary" fontSize="sm">
+                            {car.responsible_name}
+                          </Text>
+                        </Td>
+
+                        {/* 5. Speedometer */}
+                        <Td borderColor="border">
+                          <HStack
+                            spacing={2}
+                            bg="blackAlpha.50"
                             px={2.5}
-                            py={0.5}
-                            borderRadius="md"
-                            fontWeight="600"
-                            letterSpacing="0.5px"
+                            py={1}
+                            borderRadius="lg"
+                            display="inline-flex"
+                            border="1px solid"
+                            borderColor="border"
                           >
-                            {car.plate_number}
-                          </Badge>
-                        </Td>
-
-                        <Td
-                          borderColor="border"
-                          color="textSecondary"
-                          fontSize="sm"
-                        >
-                          {car.driver_name}
-                        </Td>
-
-                        <Td
-                          borderColor="border"
-                          color="textSecondary"
-                          fontSize="sm"
-                        >
-                          {car.responsible_name}
-                        </Td>
-
-                        <Td
-                          borderColor="border"
-                          color="text"
-                          fontSize="sm"
-                          fontWeight="500"
-                        >
-                          <HStack spacing={1.5}>
                             <Gauge
                               size={14}
                               color="var(--chakra-colors-textSecondary)"
                             />
-                            <Text>
-                              {car.speedometer.toLocaleString("uz-UZ")} km
+                            <Text color="text" fontSize="xs" fontWeight="600">
+                              {car.speedometer
+                                ? car.speedometer.toLocaleString("uz-UZ")
+                                : 0}{" "}
+                              km
                             </Text>
                           </HStack>
                         </Td>
 
+                        {/* 6. Holati */}
                         <Td borderColor="border">
                           {car.is_active ? (
-                            <Badge
-                              fontSize="xs"
+                            <HStack
+                              spacing={1.5}
                               px={2.5}
-                              py={0.5}
-                              borderRadius="md"
+                              py={1}
+                              borderRadius="full"
                               bg="green.50"
-                              color="green.600"
+                              color="green.700"
                               border="1px solid"
                               borderColor="green.200"
+                              display="inline-flex"
                             >
-                              Faol
-                            </Badge>
+                              <Box
+                                w="6px"
+                                h="6px"
+                                borderRadius="full"
+                                bg="green.500"
+                              />
+                              <Text fontSize="xs" fontWeight="600">
+                                Faol
+                              </Text>
+                            </HStack>
                           ) : (
-                            <Badge
-                              fontSize="xs"
+                            <HStack
+                              spacing={1.5}
                               px={2.5}
-                              py={0.5}
-                              borderRadius="md"
+                              py={1}
+                              borderRadius="full"
                               bg="red.50"
-                              color="red.600"
+                              color="red.700"
                               border="1px solid"
                               borderColor="red.200"
+                              display="inline-flex"
                             >
-                              Nofaol
-                            </Badge>
+                              <Box
+                                w="6px"
+                                h="6px"
+                                borderRadius="full"
+                                bg="red.500"
+                              />
+                              <Text fontSize="xs" fontWeight="600">
+                                Nofaol
+                              </Text>
+                            </HStack>
                           )}
                         </Td>
 
+                        {/* 7. Amallar */}
                         <Td borderColor="border" pr={6}>
-                          <Flex justify="center" align="center" gap={1.5}>
-                            <Tooltip label="Yonilg'i normasini o'rnatish">
+                          <Flex justify="center" align="center" gap={2}>
+                            <Tooltip
+                              label="Yoqilg'i normasini belgilash"
+                              hasArrow
+                            >
                               <Button
                                 size="xs"
                                 variant="outline"
-                                borderColor="border"
+                                borderColor={`${ACCENT}40`}
                                 color={ACCENT}
-                                _hover={{ bg: `${ACCENT}1A` }}
+                                _hover={{
+                                  bg: `${ACCENT}15`,
+                                  borderColor: ACCENT,
+                                }}
                                 fontSize="11px"
-                                borderRadius="md"
+                                fontWeight="600"
+                                borderRadius="lg"
+                                px={3}
+                                h="28px"
                                 onClick={() => handleOpenNormModal(car)}
                               >
-                                Norma o'rnatish
+                                Norma
                               </Button>
                             </Tooltip>
 
-                            <Tooltip label="Tahrirlash">
+                            <Tooltip label="Tahrirlash" hasArrow>
                               <IconButton
-                                icon={<Pencil size={15} />}
-                                size="sm"
+                                icon={<Pencil size={14} />}
+                                size="xs"
+                                w="28px"
+                                h="28px"
                                 variant="ghost"
                                 color="textSecondary"
-                                borderRadius="md"
-                                _hover={{ bg: "blackAlpha.50", color: "text" }}
+                                borderRadius="lg"
+                                border="1px solid"
+                                borderColor="transparent"
+                                _hover={{
+                                  bg: "blackAlpha.100",
+                                  color: "text",
+                                  borderColor: "border",
+                                }}
                                 aria-label="Tahrirlash"
                                 onClick={() => handleOpenEdit(car)}
                               />
                             </Tooltip>
 
-                            <Tooltip label="O'chirish">
+                            <Tooltip label="O'chirish" hasArrow>
                               <IconButton
-                                icon={<Trash2 size={15} />}
-                                size="sm"
+                                icon={<Trash2 size={14} />}
+                                size="xs"
+                                w="28px"
+                                h="28px"
                                 variant="ghost"
                                 color="red.500"
-                                borderRadius="md"
-                                _hover={{ bg: "red.50" }}
+                                borderRadius="lg"
+                                border="1px solid"
+                                borderColor="transparent"
+                                _hover={{
+                                  bg: "red.50",
+                                  borderColor: "red.200",
+                                }}
                                 aria-label="O'chirish"
                                 onClick={() => handleOpenDelete(car)}
                               />
@@ -656,39 +855,50 @@ export default function CarPage() {
 
       {/* CREATE / EDIT MODAL */}
       <Modal isOpen={isFormOpen} onClose={onFormClose} size="md" isCentered>
-        <ModalOverlay bg="blackAlpha.400" backdropFilter="blur(3px)" />
-        <ModalContent borderRadius="xl" boxShadow="2xl" bg="surface">
+        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
+        <ModalContent
+          borderRadius="2xl"
+          boxShadow="2xl"
+          bg="surface"
+          overflow="hidden"
+        >
           <ModalHeader
-            bg="surfBlur"
             borderBottom="1px solid"
             borderColor="border"
-            fontSize="lg"
+            fontSize="md"
+            fontWeight="700"
             color="text"
-            borderTopRadius="xl"
+            py={4}
+            px={6}
           >
             {selectedCarId
               ? "Avtomobil ma'lumotlarini tahrirlash"
               : "Yangi avtomobil qo'shish"}
           </ModalHeader>
-          <ModalCloseButton mt={1} color="textSecondary" />
+          <ModalCloseButton mt={1} color="textSecondary" borderRadius="lg" />
 
-          <ModalBody bg="bg" py={6}>
+          <ModalBody bg="bg" p={6}>
             <VStack spacing={4} as="form" id="car-form" onSubmit={handleSubmit}>
+              {/* Avtomobil Nomi */}
               <FormControl isRequired>
                 <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
+                  fontSize="xs"
+                  fontWeight="600"
                   color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
                 >
                   Avtomobil nomi
                 </FormLabel>
                 <Input
                   name="name"
-                  placeholder="Masalan: Chevrolet Cobalt"
+                  placeholder="Masalan: BYD Song Plus"
                   bg="surface"
                   color="text"
                   borderColor="border"
-                  focusBorderColor="primary"
+                  borderRadius="xl"
+                  size="md"
+                  focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
                   value={formData.name}
                   onChange={handleChange}
@@ -696,32 +906,177 @@ export default function CarPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
-                  color="textSecondary"
+                <Flex align="center" justify="space-between" mb={1.5}>
+                  <FormLabel
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="textSecondary"
+                    textTransform="uppercase"
+                    letterSpacing="0.5px"
+                    mb={0}
+                  >
+                    Davlat raqami
+                  </FormLabel>
+
+                  {/* ⚡ ELEKTROMOBIL TOGGLE SWITCH */}
+                  <HStack spacing={1.5}>
+                    <Zap
+                      size={13}
+                      color={formData.is_electric ? "#10B981" : "gray"}
+                    />
+                    <Text
+                      fontSize="xs"
+                      fontWeight="600"
+                      color={
+                        formData.is_electric ? "green.500" : "textSecondary"
+                      }
+                    >
+                      Elektromobil
+                    </Text>
+                    <Switch
+                      size="sm"
+                      colorScheme="green"
+                      name="is_electric"
+                      isChecked={formData.is_electric}
+                      onChange={handleChange}
+                    />
+                  </HStack>
+                </Flex>
+
+                {/* Live Preview Davlat Raqami Input */}
+                <Flex
+                  align="center"
+                  bg="white"
+                  color="black"
+                  border="1.5px solid #000"
+                  borderRadius="xl"
+                  overflow="hidden"
+                  boxShadow="0 2px 6px rgba(0,0,0,0.08)"
+                  h="42px"
+                  maxW="270px"
+                  userSelect="none"
+                  _focusWithin={{
+                    borderColor: ACCENT,
+                    boxShadow: `0 0 0 3px ${ACCENT}26`,
+                  }}
+                  transition="all 0.2s ease"
                 >
-                  Davlat raqami
-                </FormLabel>
-                <Input
-                  name="plate_number"
-                  placeholder="Masalan: 01 A 777 AA"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  focusBorderColor="primary"
-                  textTransform={"uppercase"}
-                  _hover={{ borderColor: ACCENT }}
-                  value={formData.plate_number}
-                  onChange={handleChange}
-                />
+                  {/* 1. Viloyat kodi */}
+                  <Center
+                    bg={formData.is_electric ? "#70C837" : "white"}
+                    px={2.5}
+                    h="100%"
+                    transition="background 0.2s"
+                  >
+                    <Text
+                      fontWeight="800"
+                      fontSize="sm"
+                      lineHeight="1"
+                      fontFamily="monospace"
+                      color={
+                        !formData.plate_number ||
+                        formData.plate_number.replace(/\s+/g, "").length < 1
+                          ? "gray.400"
+                          : "black"
+                      }
+                    >
+                      {(() => {
+                        const clean = (formData.plate_number || "")
+                          .replace(/\s+/g, "")
+                          .toUpperCase();
+                        if (clean.length === 0) return "01";
+                        if (clean.length === 1) return clean;
+                        return clean.slice(0, 2);
+                      })()}
+                    </Text>
+                  </Center>
+
+                  {/* Tik chiziq */}
+                  <Box w="1.5px" bg="#000" alignSelf="stretch" />
+
+                  {/* 2. Asosiy Input */}
+                  <Input
+                    name="plate_number"
+                    placeholder="020 DAV yoki A 777 AA"
+                    variant="unstyled"
+                    px={2.5}
+                    fontWeight="800"
+                    fontSize="sm"
+                    fontFamily="monospace"
+                    letterSpacing="1px"
+                    textTransform="uppercase"
+                    color="black"
+                    _placeholder={{
+                      color: "gray.300",
+                      fontWeight: "400",
+                      fontSize: "xs",
+                    }}
+                    value={(() => {
+                      const clean = (formData.plate_number || "")
+                        .replace(/\s+/g, "")
+                        .toUpperCase();
+                      return clean.length > 2 ? clean.slice(2) : "";
+                    })()}
+                    onChange={(e) => {
+                      const inputVal = e.target.value
+                        .replace(/\s+/g, "")
+                        .toUpperCase();
+                      const currentFull = (formData.plate_number || "")
+                        .replace(/\s+/g, "")
+                        .toUpperCase();
+
+                      let updatedValue = "";
+
+                      if (currentFull.length < 2) {
+                        // Birinchi 2 ta belgi viloyat kodiga ketadi
+                        updatedValue = (currentFull + inputVal).slice(0, 2);
+                      } else {
+                        // Dastlabki 2 ta viloyat kodi saqlanib, qolgan qismi kiritiladi
+                        const region = currentFull.slice(0, 2);
+                        updatedValue = region + inputVal;
+                      }
+
+                      handleChange({
+                        target: {
+                          name: "plate_number",
+                          value: updatedValue,
+                        },
+                      });
+                    }}
+                  />
+
+                  {/* 3. Bayroqcha va UZ */}
+                  <VStack
+                    spacing={0}
+                    align="center"
+                    pl={1}
+                    pr={2.5}
+                    justify="center"
+                  >
+                    <Text fontSize="11px" lineHeight="1">
+                      🇺🇿
+                    </Text>
+                    <Text
+                      fontSize="7.5px"
+                      fontWeight="900"
+                      color="#0033A0"
+                      lineHeight="1"
+                      mt="1px"
+                    >
+                      UZ
+                    </Text>
+                  </VStack>
+                </Flex>
               </FormControl>
 
+              {/* Mas'ul xodim */}
               <FormControl>
                 <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
+                  fontSize="xs"
+                  fontWeight="600"
                   color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
                 >
                   Mas'ul xodim
                 </FormLabel>
@@ -731,7 +1086,9 @@ export default function CarPage() {
                   bg="surface"
                   color="text"
                   borderColor="border"
-                  focusBorderColor="primary"
+                  borderRadius="xl"
+                  size="md"
+                  focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
                   value={formData.responsible_employee_id}
                   onChange={handleChange}
@@ -744,11 +1101,14 @@ export default function CarPage() {
                 </Select>
               </FormControl>
 
+              {/* Haydovchi */}
               <FormControl>
                 <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
+                  fontSize="xs"
+                  fontWeight="600"
                   color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
                 >
                   Haydovchi
                 </FormLabel>
@@ -758,7 +1118,9 @@ export default function CarPage() {
                   bg="surface"
                   color="text"
                   borderColor="border"
-                  focusBorderColor="primary"
+                  borderRadius="xl"
+                  size="md"
+                  focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
                   value={formData.driver_id}
                   onChange={handleChange}
@@ -771,11 +1133,14 @@ export default function CarPage() {
                 </Select>
               </FormControl>
 
+              {/* Speedometer */}
               <FormControl>
                 <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
+                  fontSize="xs"
+                  fontWeight="600"
                   color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
                 >
                   Speedometer (km)
                 </FormLabel>
@@ -786,25 +1151,24 @@ export default function CarPage() {
                   bg="surface"
                   color="text"
                   borderColor="border"
-                  focusBorderColor="primary"
+                  borderRadius="xl"
+                  size="md"
+                  focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
                   value={formData.speedometer}
                   onChange={handleChange}
                 />
               </FormControl>
 
+              {/* Avtomobil holati */}
               <FormControl
                 display="flex"
-                align="center"
-                justify="space-between"
+                alignItems="center"
+                justifyContent="space-between"
                 pt={2}
+                px={1}
               >
-                <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
-                  color="textSecondary"
-                  mb={0}
-                >
+                <FormLabel fontSize="sm" fontWeight="500" color="text" mb={0}>
                   Avtomobil holati (Faol)
                 </FormLabel>
                 <Switch
@@ -817,20 +1181,22 @@ export default function CarPage() {
             </VStack>
           </ModalBody>
 
+          {/* Modal Footer */}
           <ModalFooter
             borderTop="1px solid"
             borderColor="border"
-            bg="surfBlur"
-            borderBottomRadius="xl"
+            bg="surface"
+            py={3.5}
+            px={6}
           >
             <Button
-              variant="outline"
-              borderColor="border"
-              color="text"
-              _hover={{ bg: "blackAlpha.50" }}
+              variant="ghost"
+              color="textSecondary"
+              _hover={{ bg: "blackAlpha.50", color: "text" }}
               mr={3}
               onClick={onFormClose}
               size="sm"
+              borderRadius="xl"
               isDisabled={isSubmitting}
             >
               Bekor qilish
@@ -838,13 +1204,16 @@ export default function CarPage() {
             <Button
               bg={ACCENT}
               color="white"
-              _hover={{ bg: "#2563EB" }}
-              _active={{ bg: "#1D4ED8" }}
+              _hover={{ bg: "#2563EB", transform: "translateY(-1px)" }}
+              _active={{ bg: "#1D4ED8", transform: "translateY(0)" }}
               type="submit"
               form="car-form"
               isLoading={isSubmitting}
               size="sm"
               px={6}
+              borderRadius="xl"
+              boxShadow="sm"
+              transition="all 0.15s ease"
             >
               Saqlash
             </Button>
@@ -854,24 +1223,42 @@ export default function CarPage() {
 
       {/* 🟢 NORMA O'RNATISH MODAL */}
       <Modal isOpen={isNormOpen} onClose={onNormClose} size="md" isCentered>
-        <ModalOverlay bg="blackAlpha.400" backdropFilter="blur(3px)" />
-        <ModalContent borderRadius="xl" boxShadow="2xl" bg="surface">
+        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
+        <ModalContent
+          borderRadius="2xl"
+          boxShadow="2xl"
+          bg="surface"
+          overflow="hidden"
+        >
           <ModalHeader
-            bg="surfBlur"
             borderBottom="1px solid"
             borderColor="border"
-            fontSize="lg"
-            color="text"
-            borderTopRadius="xl"
+            py={4}
+            px={6}
           >
-            <HStack spacing={2}>
-              <Fuel size={20} color={ACCENT} />
-              <Text fontSize="md">Yoqilg'i normasini belgilash</Text>
+            <HStack spacing={2.5}>
+              <Center
+                w="32px"
+                h="32px"
+                borderRadius="lg"
+                bg={`${ACCENT}15`}
+                color={ACCENT}
+              >
+                <Fuel size={18} />
+              </Center>
+              <Text fontSize="md" fontWeight="700" color="text">
+                Yoqilg'i normasini belgilash
+              </Text>
             </HStack>
           </ModalHeader>
-          <ModalCloseButton mt={1} color="textSecondary" />
+          <ModalCloseButton
+            mt={1.5}
+            mr={1}
+            color="textSecondary"
+            borderRadius="lg"
+          />
 
-          <ModalBody bg="bg" py={6}>
+          <ModalBody bg="bg" p={6}>
             <VStack
               spacing={4}
               as="form"
@@ -880,25 +1267,59 @@ export default function CarPage() {
             >
               <Box
                 w="full"
-                p={3}
-                borderRadius="lg"
-                bg={`${ACCENT}10`}
+                p={3.5}
+                borderRadius="xl"
+                bg="surface"
                 border="1px solid"
-                borderColor={`${ACCENT}30`}
+                borderColor="border"
+                boxShadow="xs"
               >
-                <Text fontSize="xs" color="textSecondary">
-                  Tanlangan avtomobil:
+                <Text
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
+                  mb={1}
+                >
+                  Tanlangan avtomobil
                 </Text>
-                <Text fontWeight="600" color="text">
-                  {selectedCar?.name} ({selectedCar?.plate_number})
-                </Text>
+                <Flex align="center" justify="space-between">
+                  <Text fontWeight="600" color="text" fontSize="sm">
+                    {selectedCar?.name || "Avtomobil tanlanmagan"}
+                  </Text>
+
+                  {selectedCar?.plate_number && (
+                    <Badge
+                      bg="white"
+                      color="black"
+                      border="1px solid #000"
+                      borderRadius="base"
+                      px={1.5}
+                      py={0.5}
+                      fontFamily="monospace"
+                      fontSize="xs"
+                      fontWeight="800"
+                      letterSpacing="0.5px"
+                    >
+                      {(() => {
+                        const { region, main } = formatPlateNumber(
+                          selectedCar.plate_number
+                        );
+                        return `${region} ${main}`.trim();
+                      })()}
+                    </Badge>
+                  )}
+                </Flex>
               </Box>
 
               <FormControl isRequired>
                 <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
+                  fontSize="xs"
+                  fontWeight="600"
                   color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
                 >
                   Yoqilg'i turi
                 </FormLabel>
@@ -907,7 +1328,9 @@ export default function CarPage() {
                   bg="surface"
                   color="text"
                   borderColor="border"
-                  focusBorderColor="primary"
+                  borderRadius="xl"
+                  size="md"
+                  focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
                   value={normFormData.fuel_id}
                   onChange={(e) =>
@@ -927,19 +1350,24 @@ export default function CarPage() {
 
               <FormControl isRequired>
                 <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
+                  fontSize="xs"
+                  fontWeight="600"
                   color="textSecondary"
+                  textTransform="uppercase"
+                  letterSpacing="0.5px"
                 >
                   100 km uchun norma (Litr / Kub / KW)
                 </FormLabel>
                 <Input
                   type="number"
+                  step="0.1"
                   placeholder="Masalan: 8.5"
                   bg="surface"
                   color="text"
                   borderColor="border"
-                  focusBorderColor="primary"
+                  borderRadius="xl"
+                  size="md"
+                  focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
                   value={normFormData.norm_per_100km}
                   onChange={(e) =>
@@ -956,17 +1384,18 @@ export default function CarPage() {
           <ModalFooter
             borderTop="1px solid"
             borderColor="border"
-            bg="surfBlur"
-            borderBottomRadius="xl"
+            bg="surface"
+            py={3.5}
+            px={6}
           >
             <Button
-              variant="outline"
-              borderColor="border"
-              color="text"
-              _hover={{ bg: "blackAlpha.50" }}
+              variant="ghost"
+              color="textSecondary"
+              _hover={{ bg: "blackAlpha.50", color: "text" }}
               mr={3}
               onClick={onNormClose}
               size="sm"
+              borderRadius="xl"
               isDisabled={isSubmitting}
             >
               Bekor qilish
@@ -974,15 +1403,18 @@ export default function CarPage() {
             <Button
               bg={ACCENT}
               color="white"
-              _hover={{ bg: "#2563EB" }}
-              _active={{ bg: "#1D4ED8" }}
+              _hover={{ bg: "#2563EB", transform: "translateY(-1px)" }}
+              _active={{ bg: "#1D4ED8", transform: "translateY(0)" }}
               type="submit"
               form="norm-form"
               isLoading={isSubmitting}
               size="sm"
               px={6}
+              borderRadius="xl"
+              boxShadow="sm"
+              transition="all 0.15s ease"
             >
-              Normani Saqlash
+              Normani saqlash
             </Button>
           </ModalFooter>
         </ModalContent>
