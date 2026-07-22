@@ -13,7 +13,7 @@ class apiCars {
     responsible_employee_id = "",
     driver_id = "",
     sortBy = "",
-    sortOrder = ""
+    sortOrder = "",
   ) => {
     const params = { page, limit };
 
@@ -36,36 +36,25 @@ class apiCars {
   };
 
   static Create = async (data) => {
-    const response = await $api.post(
-      `${BASE_URL}/cars`,
-      data,
-      {
-        showSuccessToast: "Car successfully created",
-      }
-    );
+    const response = await $api.post(`${BASE_URL}/cars`, data, {
+      showSuccessToast: "Car successfully created",
+    });
 
     return response;
   };
 
   static Update = async (id, data) => {
-    const response = await $api.patch(
-      `${BASE_URL}/cars/${id}`,
-      data,
-      {
-        showSuccessToast: "Car successfully updated",
-      }
-    );
+    const response = await $api.patch(`${BASE_URL}/cars/${id}`, data, {
+      showSuccessToast: "Car successfully updated",
+    });
 
     return response;
   };
 
   static Delete = async (id) => {
-    const response = await $api.delete(
-      `${BASE_URL}/cars/${id}`,
-      {
-        showSuccessToast: "Car successfully deleted",
-      }
-    );
+    const response = await $api.delete(`${BASE_URL}/cars/${id}`, {
+      showSuccessToast: "Car successfully deleted",
+    });
 
     return response;
   };
@@ -81,7 +70,7 @@ class apiCars {
     fuel_id = "",
     search = "",
     sortBy = "",
-    sortOrder = ""
+    sortOrder = "",
   ) => {
     const params = { page, limit };
 
@@ -91,30 +80,21 @@ class apiCars {
     if (sortBy) params.sortBy = sortBy;
     if (sortOrder) params.sortOrder = sortOrder;
 
-    const response = await $api.get(
-      `${BASE_URL}/car-fuel-norms`,
-      { params }
-    );
+    const response = await $api.get(`${BASE_URL}/car-fuel-norms`, { params });
 
     return response;
   };
 
   static OneNorm = async (id) => {
-    const response = await $api.get(
-      `${BASE_URL}/car-fuel-norms/${id}`
-    );
+    const response = await $api.get(`${BASE_URL}/car-fuel-norms/${id}`);
 
     return response;
   };
 
   static CreateNorm = async (data) => {
-    const response = await $api.post(
-      `${BASE_URL}/car-fuel-norms`,
-      data,
-      {
-        showSuccessToast: "Fuel norm successfully created",
-      }
-    );
+    const response = await $api.post(`${BASE_URL}/car-fuel-norms`, data, {
+      showSuccessToast: "Fuel norm successfully created",
+    });
 
     return response;
   };
@@ -125,19 +105,16 @@ class apiCars {
       data,
       {
         showSuccessToast: "Fuel norm successfully updated",
-      }
+      },
     );
 
     return response;
   };
 
   static DeleteNorm = async (id) => {
-    const response = await $api.delete(
-      `${BASE_URL}/car-fuel-norms/${id}`,
-      {
-        showSuccessToast: "Fuel norm successfully deleted",
-      }
-    );
+    const response = await $api.delete(`${BASE_URL}/car-fuel-norms/${id}`, {
+      showSuccessToast: "Fuel norm successfully deleted",
+    });
 
     return response;
   };

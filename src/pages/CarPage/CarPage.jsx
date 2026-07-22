@@ -37,7 +37,15 @@ import {
   HStack,
   Switch,
 } from "@chakra-ui/react";
-import { Search, Plus, Pencil, Trash2, Car as CarIcon, Gauge, Fuel } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Pencil,
+  Trash2,
+  Car as CarIcon,
+  Gauge,
+  Fuel,
+} from "lucide-react";
 import { apiCars } from "../../Services/api/Cars";
 import { apiEmployees } from "../../Services/api/Users";
 import { apiFuel } from "../../Services/api/Fuels";
@@ -95,6 +103,17 @@ export default function CarPage() {
 
   const toast = useToast();
 
+  // Backend javobi { data: { pagination, records } } yoki { data: [...] } bo'lishi mumkin.
+  // Shu funksiya qaysi formatda kelishidan qat'iy nazar har doim massiv qaytaradi.
+  const extractRecords = (res) => {
+    const payload = res?.data;
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.records)) return payload.records;
+    if (Array.isArray(payload?.data?.records)) return payload.data.records;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
   // 1. Xodimlarni role bo'yicha yuklash
   const fetchEmployeesByRole = async () => {
     try {
@@ -103,13 +122,12 @@ export default function CarPage() {
         apiEmployees.Filter("responsible", "", 1, 100),
       ]);
 
-      const rawDrivers = driversRes.data?.data || driversRes.data || [];
-      const rawResponsibles = responsiblesRes.data?.data || responsiblesRes.data || [];
-
-      setDrivers(rawDrivers);
-      setResponsibles(rawResponsibles);
+      setDrivers(extractRecords(driversRes));
+      setResponsibles(extractRecords(responsiblesRes));
     } catch (error) {
       console.error("Xodimlarni yuklashda xatolik:", error);
+      setDrivers([]);
+      setResponsibles([]);
     }
   };
 
@@ -117,10 +135,10 @@ export default function CarPage() {
   const fetchFuels = async () => {
     try {
       const res = await apiFuel.All(1, 100);
-      const rawFuels = res.data?.data || res.data || [];
-      setFuels(rawFuels);
+      setFuels(extractRecords(res));
     } catch (error) {
       console.error("Yonilg'i turlarini yuklashda xatolik:", error);
+      setFuels([]);
     }
   };
 
@@ -129,12 +147,13 @@ export default function CarPage() {
     setLoading(true);
     try {
       const res = await apiCars.All(1, 100, search);
-      const rawData = res.data?.data || res.data || [];
+      const rawData = extractRecords(res);
 
       const mappedCars = rawData.map((car) => {
         let driverName = "Biriktirilmagan";
         if (car.driver && typeof car.driver === "object") {
-          driverName = car.driver.full_name || car.driver.login || "Ismsiz xodim";
+          driverName =
+            car.driver.full_name || car.driver.login || "Ismsiz xodim";
         } else if (car.driver_info && typeof car.driver_info === "object") {
           driverName = car.driver_info.full_name || "Ismsiz xodim";
         } else if (typeof car.driver === "string") {
@@ -142,8 +161,14 @@ export default function CarPage() {
         }
 
         let responsibleName = "Biriktirilmagan";
-        if (car.responsible_employee && typeof car.responsible_employee === "object") {
-          responsibleName = car.responsible_employee.full_name || car.responsible_employee.login || "Ismsiz xodim";
+        if (
+          car.responsible_employee &&
+          typeof car.responsible_employee === "object"
+        ) {
+          responsibleName =
+            car.responsible_employee.full_name ||
+            car.responsible_employee.login ||
+            "Ismsiz xodim";
         } else if (typeof car.responsible_employee === "string") {
           responsibleName = car.responsible_employee;
         }
@@ -153,14 +178,19 @@ export default function CarPage() {
           name: car.name || car.car_name || "Nomsiz transport",
           plate_number: car.plate_number || car.plate || car.state_number || "",
           driver_name: driverName,
-          driver_id: car.driver && typeof car.driver === "object" ? car.driver.id : car.driver_id || "",
+          driver_id:
+            car.driver && typeof car.driver === "object"
+              ? car.driver.id
+              : car.driver_id || "",
           responsible_name: responsibleName,
           responsible_employee_id:
-            car.responsible_employee && typeof car.responsible_employee === "object"
+            car.responsible_employee &&
+            typeof car.responsible_employee === "object"
               ? car.responsible_employee.id
               : car.responsible_employee_id || "",
           speedometer: Number(car.speedometer || 0),
-          is_active: car.is_active !== undefined ? Boolean(car.is_active) : true,
+          is_active:
+            car.is_active !== undefined ? Boolean(car.is_active) : true,
         };
       });
 
@@ -199,8 +229,8 @@ export default function CarPage() {
         type === "checkbox"
           ? checked
           : name === "speedometer"
-          ? Number(value)
-          : value,
+            ? Number(value)
+            : value,
     }));
   };
 
@@ -328,10 +358,11 @@ export default function CarPage() {
     <Box
       bg="bg"
       minH="100vh"
+      w="100%"
       p={{ base: 4, md: 6 }}
       transition="background 0.2s ease"
     >
-      <Box maxW="container.xl" mx="auto">
+      <Box w="100%">
         {/* PAGE HEADER */}
         <Flex
           justify="space-between"
@@ -531,18 +562,36 @@ export default function CarPage() {
                           </Badge>
                         </Td>
 
-                        <Td borderColor="border" color="textSecondary" fontSize="sm">
+                        <Td
+                          borderColor="border"
+                          color="textSecondary"
+                          fontSize="sm"
+                        >
                           {car.driver_name}
                         </Td>
 
-                        <Td borderColor="border" color="textSecondary" fontSize="sm">
+                        <Td
+                          borderColor="border"
+                          color="textSecondary"
+                          fontSize="sm"
+                        >
                           {car.responsible_name}
                         </Td>
 
-                        <Td borderColor="border" color="text" fontSize="sm" fontWeight="500">
+                        <Td
+                          borderColor="border"
+                          color="text"
+                          fontSize="sm"
+                          fontWeight="500"
+                        >
                           <HStack spacing={1.5}>
-                            <Gauge size={14} color="var(--chakra-colors-textSecondary)" />
-                            <Text>{car.speedometer.toLocaleString("uz-UZ")} km</Text>
+                            <Gauge
+                              size={14}
+                              color="var(--chakra-colors-textSecondary)"
+                            />
+                            <Text>
+                              {car.speedometer.toLocaleString("uz-UZ")} km
+                            </Text>
                           </HStack>
                         </Td>
 
@@ -578,7 +627,6 @@ export default function CarPage() {
 
                         <Td borderColor="border" pr={6}>
                           <Flex justify="center" align="center" gap={1.5}>
-                            {/* 🟢 ENDI ISHLAYDIGAN NORMA O'RNATISH TUGMASI */}
                             <Tooltip label="Yonilg'i normasini o'rnatish">
                               <Button
                                 size="xs"
@@ -652,7 +700,11 @@ export default function CarPage() {
           <ModalBody bg="bg" py={6}>
             <VStack spacing={4} as="form" id="car-form" onSubmit={handleSubmit}>
               <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Avtomobil nomi
                 </FormLabel>
                 <Input
@@ -669,7 +721,11 @@ export default function CarPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Davlat raqami
                 </FormLabel>
                 <Input
@@ -680,7 +736,6 @@ export default function CarPage() {
                   borderColor="border"
                   focusBorderColor="primary"
                   textTransform={"uppercase"}
-                  maxLength={6}
                   _hover={{ borderColor: ACCENT }}
                   value={formData.plate_number}
                   onChange={handleChange}
@@ -688,7 +743,11 @@ export default function CarPage() {
               </FormControl>
 
               <FormControl>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Mas'ul xodim
                 </FormLabel>
                 <Select
@@ -711,7 +770,11 @@ export default function CarPage() {
               </FormControl>
 
               <FormControl>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Haydovchi
                 </FormLabel>
                 <Select
@@ -734,7 +797,11 @@ export default function CarPage() {
               </FormControl>
 
               <FormControl>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Speedometer (km)
                 </FormLabel>
                 <Input
@@ -751,8 +818,18 @@ export default function CarPage() {
                 />
               </FormControl>
 
-              <FormControl display="flex" align="center" justify="space-between" pt={2}>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary" mb={0}>
+              <FormControl
+                display="flex"
+                align="center"
+                justify="space-between"
+                pt={2}
+              >
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                  mb={0}
+                >
                   Avtomobil holati (Faol)
                 </FormLabel>
                 <Switch
@@ -820,14 +897,34 @@ export default function CarPage() {
           <ModalCloseButton mt={1} color="textSecondary" />
 
           <ModalBody bg="bg" py={6}>
-            <VStack spacing={4} as="form" id="norm-form" onSubmit={handleNormSubmit}>
-              <Box w="full" p={3} borderRadius="lg" bg={`${ACCENT}10`} border="1px solid" borderColor={`${ACCENT}30`}>
-                <Text fontSize="xs" color="textSecondary">Tanlangan avtomobil:</Text>
-                <Text fontWeight="600" color="text">{selectedCar?.name} ({selectedCar?.plate_number})</Text>
+            <VStack
+              spacing={4}
+              as="form"
+              id="norm-form"
+              onSubmit={handleNormSubmit}
+            >
+              <Box
+                w="full"
+                p={3}
+                borderRadius="lg"
+                bg={`${ACCENT}10`}
+                border="1px solid"
+                borderColor={`${ACCENT}30`}
+              >
+                <Text fontSize="xs" color="textSecondary">
+                  Tanlangan avtomobil:
+                </Text>
+                <Text fontWeight="600" color="text">
+                  {selectedCar?.name} ({selectedCar?.plate_number})
+                </Text>
               </Box>
 
               <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Yoqilg'i turi
                 </FormLabel>
                 <Select
@@ -838,7 +935,12 @@ export default function CarPage() {
                   focusBorderColor="primary"
                   _hover={{ borderColor: ACCENT }}
                   value={normFormData.fuel_id}
-                  onChange={(e) => setNormFormData({ ...normFormData, fuel_id: e.target.value })}
+                  onChange={(e) =>
+                    setNormFormData({
+                      ...normFormData,
+                      fuel_id: e.target.value,
+                    })
+                  }
                 >
                   {fuels.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -849,7 +951,11 @@ export default function CarPage() {
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   100 km uchun norma (Litr / Kub)
                 </FormLabel>
                 <Input
@@ -861,7 +967,12 @@ export default function CarPage() {
                   focusBorderColor="primary"
                   _hover={{ borderColor: ACCENT }}
                   value={normFormData.norm_per_100km}
-                  onChange={(e) => setNormFormData({ ...normFormData, norm_per_100km: e.target.value })}
+                  onChange={(e) =>
+                    setNormFormData({
+                      ...normFormData,
+                      norm_per_100km: e.target.value,
+                    })
+                  }
                 />
               </FormControl>
             </VStack>
@@ -918,7 +1029,8 @@ export default function CarPage() {
 
           <ModalBody bg="bg" py={4}>
             <Text color="text">
-              Siz rostdan ham <b>{carToDelete?.name}</b> avtomobilini o'chirmoqchimisiz?
+              Siz rostdan ham <b>{carToDelete?.name}</b> avtomobilini
+              o'chirmoqchimisiz?
             </Text>
             <Text mt={2} fontSize="sm" color="textSecondary">
               Ushbu amalni ortga qaytarib bo'lmaydi.

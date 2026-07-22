@@ -4,7 +4,9 @@ import { Toaster } from "react-hot-toast";
 import ErrorPage from "./pages/ErrorPage";
 import Login from "./pages/Login/Login";
 import superAdminRoutes from "./routes/AdminRoutes";
+import xodimRoutes from "./routes/XodimRoutes";
 import AdminLayout from "./layouts/AdminLayout";
+import XodimLayout from "./layouts/XodimLayout";
 import RequireAuth from "./auth/RequireAuth";
 import { Navigate } from "react-router";
 
@@ -22,6 +24,15 @@ function App() {
             ))}
           </Route>
         </Route>
+
+        <Route element={<RequireAuth role="admin" />}>
+          <Route path="/xodim" element={<XodimLayout />}>
+            {xodimRoutes.map((r) => (
+              <Route key={r.name} path={r.path} element={r.element} />
+            ))}
+          </Route>
+        </Route>
+
         <Route path="*" element={<ErrorPage />} />
       </Routes>
       <Toaster

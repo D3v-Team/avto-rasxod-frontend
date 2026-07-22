@@ -170,10 +170,11 @@ export default function FuelPage() {
     <Box
       bg="bg"
       minH="100vh"
+      w="100%"
       p={{ base: 4, md: 6 }}
       transition="background 0.2s ease"
     >
-      <Box maxW="container.xl" mx="auto">
+      <Box w="100%">
         {/* Header Section */}
         <Flex
           justify="space-between"
@@ -231,7 +232,11 @@ export default function FuelPage() {
             </VStack>
           </Center>
         ) : (
-          <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
+          <SimpleGrid
+            columns={{ base: 1, sm: 2, md: 3, lg: 4, xl: 5, "2xl": 6 }}
+            spacing={6}
+            w="100%"
+          >
             {fuels.map((fuel) => {
               const fuelTheme = getFuelTheme(fuel.name);
               return (
