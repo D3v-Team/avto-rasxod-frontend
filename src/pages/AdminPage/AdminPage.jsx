@@ -100,7 +100,7 @@ export default function AdminPage() {
   const filteredAdmins = admins.filter(
     (a) =>
       (a.fullName?.toLowerCase() || "").includes(search.toLowerCase()) ||
-      (a.phone?.toLowerCase() || "").includes(search.toLowerCase())
+      (a.phone?.toLowerCase() || "").includes(search.toLowerCase()),
   );
 
   function openCreateModal() {
@@ -123,7 +123,6 @@ export default function AdminPage() {
   async function handleSave(e) {
     e?.preventDefault();
     if (!form.fullName.trim() || !form.phone.trim()) {
-     
       return;
     }
 
@@ -138,14 +137,12 @@ export default function AdminPage() {
     try {
       if (editingId) {
         await apiEmployees.Update(editingId, payload);
-       
       } else {
         await apiEmployees.Create(payload);
-       
       }
       onClose();
       fetchEmployees();
-    }  finally {
+    } finally {
       setIsSubmitting(false);
     }
   }
@@ -160,10 +157,9 @@ export default function AdminPage() {
     setIsSubmitting(true);
     try {
       await apiEmployees.Delete(deleteId);
-     
       onDeleteClose();
       fetchEmployees();
-    }  finally {
+    } finally {
       setIsSubmitting(false);
     }
   }
@@ -172,10 +168,11 @@ export default function AdminPage() {
     <Box
       bg="bg"
       minH="100vh"
+      w="100%"
       p={{ base: 4, md: 6 }}
       transition="background 0.2s ease"
     >
-      <Box maxW="container.xl" mx="auto">
+      <Box w="100%" maxW="100%" mx="auto">
         {/* HEADER SECTION */}
         <Flex
           justify="space-between"
@@ -245,7 +242,14 @@ export default function AdminPage() {
         </Flex>
 
         {/* TABLE CARD SECTION */}
-        <Card bg="surface" border="1px solid" borderColor="border" borderRadius="xl" boxShadow="sm">
+        <Card
+          bg="surface"
+          border="1px solid"
+          borderColor="border"
+          borderRadius="xl"
+          boxShadow="sm"
+          w="100%"
+        >
           <CardBody p={0}>
             {loading ? (
               <Center py={16}>
@@ -259,15 +263,19 @@ export default function AdminPage() {
             ) : filteredAdmins.length === 0 ? (
               <Center py={16}>
                 <VStack spacing={3}>
-                  <Users size={40} opacity={0.3} color="var(--chakra-colors-textSecondary)" />
+                  <Users
+                    size={40}
+                    opacity={0.3}
+                    color="var(--chakra-colors-textSecondary)"
+                  />
                   <Text color="textSecondary" fontSize="md">
                     Xodim topilmadi
                   </Text>
                 </VStack>
               </Center>
             ) : (
-              <Box overflowX="auto">
-                <Table variant="simple" size="md">
+              <Box overflowX="auto" w="100%">
+                <Table variant="simple" size="md" w="100%">
                   <Thead>
                     <Tr bg="surfBlur">
                       <Th
@@ -331,7 +339,11 @@ export default function AdminPage() {
                           </HStack>
                         </Td>
 
-                        <Td borderColor="border" color="textSecondary" fontSize="sm">
+                        <Td
+                          borderColor="border"
+                          color="textSecondary"
+                          fontSize="sm"
+                        >
                           {admin.phone}
                         </Td>
 
@@ -415,15 +427,26 @@ export default function AdminPage() {
             color="text"
             borderTopRadius="xl"
           >
-            {editingId ? "Xodim ma'lumotlarini tahrirlash" : "Yangi xodim qo'shish"}
+            {editingId
+              ? "Xodim ma'lumotlarini tahrirlash"
+              : "Yangi xodim qo'shish"}
           </ModalHeader>
           <ModalCloseButton mt={1} color="textSecondary" />
 
           <ModalBody bg="bg" py={6}>
-            <VStack spacing={5} as="form" id="employee-form" onSubmit={handleSave}>
+            <VStack
+              spacing={5}
+              as="form"
+              id="employee-form"
+              onSubmit={handleSave}
+            >
               {/* F.I.Sh */}
               <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   F.I.Sh
                 </FormLabel>
                 <Input
@@ -434,42 +457,52 @@ export default function AdminPage() {
                   focusBorderColor="primary"
                   _hover={{ borderColor: ACCENT }}
                   value={form.fullName}
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, fullName: e.target.value })
+                  }
                 />
               </FormControl>
 
-            <FormControl isRequired>
-  <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
-    Telefon raqam
-  </FormLabel>
-  <InputGroup>
-    {/* Chap tomonda permanent +998 prefiksi */}
-    <InputLeftElement pointerEvents="none" w="4.5rem">
-      <Text fontSize="sm" fontWeight="600" color="textSecondary">
-        +998
-      </Text>
-    </InputLeftElement>
-    <Input
-      type="number"
-      placeholder="901234567"
-      bg="surface"
-      color="text"
-      borderColor="border"
-      focusBorderColor="primary"
-      _hover={{ borderColor: ACCENT }}
-      pl="4.5rem" // Chapdan joy tashlash
-      value={form.phone.replace("+998", "")} // Agarda form.phone ichida +998 bo'lsa, uni kesib ko'rsatadi
-      onChange={(e) => {
-        const val = e.target.value.slice(0, 9); // Ko'pi bilan 9 ta raqam
-        setForm({ ...form, phone: `+998${val}` });
-      }}
-    />
-  </InputGroup>
-</FormControl>
+              <FormControl isRequired>
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
+                  Telefon raqam
+                </FormLabel>
+                <InputGroup>
+                  {/* Chap tomonda permanent +998 prefiksi */}
+                  <InputLeftElement pointerEvents="none" w="4.5rem">
+                    <Text fontSize="sm" fontWeight="600" color="textSecondary">
+                      +998
+                    </Text>
+                  </InputLeftElement>
+                  <Input
+                    type="number"
+                    placeholder="901234567"
+                    bg="surface"
+                    color="text"
+                    borderColor="border"
+                    focusBorderColor="primary"
+                    _hover={{ borderColor: ACCENT }}
+                    pl="4.5rem" // Chapdan joy tashlash
+                    value={form.phone.replace("+998", "")} // Agarda form.phone ichida +998 bo'lsa, uni kesib ko'rsatadi
+                    onChange={(e) => {
+                      const val = e.target.value.slice(0, 9); // Ko'pi bilan 9 ta raqam
+                      setForm({ ...form, phone: `+998${val}` });
+                    }}
+                  />
+                </InputGroup>
+              </FormControl>
 
               {/* Rol */}
               <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="medium" color="textSecondary">
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="textSecondary"
+                >
                   Xodim roli
                 </FormLabel>
                 <Select
@@ -482,7 +515,9 @@ export default function AdminPage() {
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
                   <option value="driver">Haydovchi (Driver)</option>
-                  <option value="responsible">Mas'ul xodim (Responsible)</option>
+                  <option value="responsible">
+                    Mas'ul xodim (Responsible)
+                  </option>
                 </Select>
               </FormControl>
             </VStack>

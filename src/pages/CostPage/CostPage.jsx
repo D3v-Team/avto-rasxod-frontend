@@ -7,12 +7,8 @@ import {
   Button,
   IconButton,
   Input,
-  InputGroup,
-  InputLeftElement,
   Select,
   Switch,
-  FormControl,
-  FormLabel,
   Table,
   Thead,
   Tbody,
@@ -31,40 +27,52 @@ import {
   AlertDialogHeader,
   AlertDialogBody,
   AlertDialogFooter,
-  Divider,
   Center,
   NumberInput,
   NumberInputField,
   Heading,
   Tooltip,
+  Avatar,
 } from "@chakra-ui/react";
 import {
   Plus,
   Fuel,
   Check,
   X,
-  CalendarDays,
   Pencil,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
   AlertTriangle,
   Car,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { apiCost } from "../../Services/api/apiCost";
 import { apiFuel } from "../../Services/api/Fuels";
 import { apiCars } from "../../Services/api/Cars";
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
+// ---------- constants & helpers ----------
+const FETCH_LIMIT = 100;
 
-// Hozirgi kunni formatlash
-const getTodayDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
+const formatAsInputDate = (dateObj) => {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+const getTodayDate = () => formatAsInputDate(new Date());
+const getMonthStartDate = () => {
+  const d = new Date();
+  d.setDate(1);
+  return formatAsInputDate(d);
+};
+
+const isFutureDate = (dateStr) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkDate = new Date(dateStr);
+  checkDate.setHours(0, 0, 0, 0);
+  return checkDate > today;
 };
 
 const EMPTY_NEW_ROW = {
@@ -85,7 +93,6 @@ const EMPTY_EDIT_FORM = {
   is_holiday: false,
 };
 
-// Yoqilg'i turlari va ularning unitlari
 const FUEL_UNIT_MAP = {
   "AI 100": "litr",
   "AI-100": "litr",
@@ -102,7 +109,6 @@ const FUEL_UNIT_MAP = {
   methane: "m3",
 };
 
-// Yoqilg'i turlari ranglari
 const FUEL_COLOR_MAP = {
   "AI 100": "purple",
   "AI-100": "purple",
@@ -134,10 +140,7 @@ const FUEL_COLOR_PALETTE = [
 
 function getFuelColorScheme(rawName, index) {
   if (!rawName) return FUEL_COLOR_PALETTE[index % FUEL_COLOR_PALETTE.length];
-
   const key = (rawName || "").toString().trim().toLowerCase();
-
-  // To'g'ridan-to'g'ri nom bo'yicha qidirish
   for (const [fuelName, color] of Object.entries(FUEL_COLOR_MAP)) {
     if (
       key === fuelName.toLowerCase() ||
@@ -146,8 +149,6 @@ function getFuelColorScheme(rawName, index) {
       return color;
     }
   }
-
-  // Qisman moslik
   if (
     key.includes("ai 100") ||
     key.includes("ai-100") ||
@@ -170,63 +171,35 @@ function getFuelColorScheme(rawName, index) {
   if (key.includes("metan") || key.includes("methane")) {
     return "primary";
   }
-
   return FUEL_COLOR_PALETTE[index % FUEL_COLOR_PALETTE.length];
 }
 
-// Yoqilg'i nomi bo'yicha birlikni aniqlash:
-// AI 100 / AI 93 / dizel / dizel EKO -> litr
-// elektr -> kwh
-// metan -> m3
 function getFuelUnit(rawName) {
   if (!rawName) return "litr";
-
   const key = (rawName || "").toString().trim();
-
-  // To'g'ridan-to'g'ri nom bo'yicha qidirish
   for (const [fuelName, unit] of Object.entries(FUEL_UNIT_MAP)) {
     if (key === fuelName || key.toLowerCase() === fuelName.toLowerCase()) {
       return unit;
     }
   }
-
-  // Qisman moslikni tekshirish
   const lowerKey = key.toLowerCase();
-
-  // Elektr -> kwh (eng avval tekshiramiz, chunki boshqa so'zlar bilan aralashmasligi kerak)
-  if (lowerKey.includes("elektr") || lowerKey.includes("electric")) {
+  if (lowerKey.includes("elektr") || lowerKey.includes("electric"))
     return "kwh";
-  }
-
-  // Metan -> m3
-  if (lowerKey.includes("metan") || lowerKey.includes("methane")) {
-    return "m3";
-  }
-
-  // AI 100, AI-100, AI100 -> litr
+  if (lowerKey.includes("metan") || lowerKey.includes("methane")) return "m3";
   if (
     lowerKey.includes("ai 100") ||
     lowerKey.includes("ai-100") ||
     lowerKey.includes("ai100")
-  ) {
+  )
     return "litr";
-  }
-
-  // AI 93, AI-93, AI93 -> litr
   if (
     lowerKey.includes("ai 93") ||
     lowerKey.includes("ai-93") ||
     lowerKey.includes("ai93")
-  ) {
+  )
     return "litr";
-  }
-
-  // Dizel / dizel EKO -> litr
-  if (lowerKey.includes("dizel")) {
-    return "litr";
-  }
-
-  return "litr"; // default
+  if (lowerKey.includes("dizel")) return "litr";
+  return "litr";
 }
 
 function pick(obj, keys, fallback = 0) {
@@ -255,20 +228,16 @@ function extractSingle(payload) {
 function normalizeFuelType(raw, index) {
   const id = pick(raw, ["id", "_id", "uuid"], null);
   const label = pick(raw, ["name", "label", "title"], id ?? "Noma'lum");
-
-  // Unitni yoqilg'i nomiga qarab aniqlaymiz (litr / kwh / m3)
   const unit = getFuelUnit(label);
-
   const price = pick(
     raw,
     ["price", "unit_price", "cost_per_unit", "price_per_unit", "narx"],
     null,
   );
-
   return {
     id,
     label: String(label),
-    unit: unit,
+    unit,
     price: price !== null && price !== undefined ? Number(price) : null,
     colorScheme: getFuelColorScheme(label, index),
   };
@@ -365,6 +334,7 @@ function formatDate(value) {
   return d.toLocaleDateString("uz-UZ");
 }
 
+// ---------- shared input styles (dark/light ready) ----------
 const inputStyles = {
   bg: "surface",
   color: "text",
@@ -381,6 +351,7 @@ const inputStyles = {
   },
 };
 
+// ---------- sub-components ----------
 function UnitNumberInput({
   value,
   onChange,
@@ -434,7 +405,6 @@ function AutoCell({ value, unit, tooltip }) {
   );
 }
 
-// Taxminiy qiymatlar endi "~" belgisisiz ko'rsatiladi
 function EstimatedCell({ value, unit, tooltip }) {
   if (
     value === null ||
@@ -473,6 +443,30 @@ function FuelBadge({ fuelId, fuelTypesById }) {
       fontWeight="bold"
     >
       {meta.label}
+    </Badge>
+  );
+}
+
+function HolidayBadge({ isHoliday }) {
+  return isHoliday ? (
+    <Badge
+      colorScheme="green"
+      variant="subtle"
+      borderRadius="md"
+      px={2}
+      py={0.5}
+    >
+      Ha
+    </Badge>
+  ) : (
+    <Badge
+      colorScheme="gray"
+      variant="subtle"
+      borderRadius="md"
+      px={2}
+      py={0.5}
+    >
+      Yo'q
     </Badge>
   );
 }
@@ -523,32 +517,11 @@ function NoCarState() {
   );
 }
 
-function FilterBar({
-  filters,
-  onChange,
-  onReset,
-  fuelTypes,
-  fuelTypesLoading,
-}) {
+// ---------- FILTER BAR – select first, then dates ----------
+function FilterBar({ filters, onChange, fuelTypes, fuelTypesLoading }) {
   return (
     <Flex direction="row" gap={3} wrap="wrap" align="center">
-      <Input
-        type="date"
-        value={filters.date_from}
-        onChange={(e) => onChange({ date_from: e.target.value })}
-        maxW="170px"
-        size="sm"
-        {...inputStyles}
-      />
-      <Input
-        type="date"
-        value={filters.date_to}
-        onChange={(e) => onChange({ date_to: e.target.value })}
-        maxW="170px"
-        size="sm"
-        {...inputStyles}
-      />
-
+      {/* Yoqilg'i turi selecti – birinchi o'rinda */}
       {fuelTypesLoading ? (
         <Skeleton h="32px" w="160px" borderRadius="md" />
       ) : (
@@ -568,52 +541,127 @@ function FilterBar({
         </Select>
       )}
 
-      <Tooltip
-        label={
-          filters.sortOrder === "ASC"
-            ? "Eski sanalar tepada (o'sish tartibi)"
-            : "Yangi sanalar tepada (kamayish tartibi)"
-        }
-        hasArrow
-      >
-        <IconButton
-          aria-label="Sana tartibini almashtirish"
-          icon={<ArrowUpDown size={16} />}
-          variant="outline"
-          size="sm"
-          borderRadius="md"
-          onClick={() =>
-            onChange({
-              sortOrder: filters.sortOrder === "ASC" ? "DESC" : "ASC",
-            })
-          }
-        />
-      </Tooltip>
-
-      <Button
-        variant="ghost"
-        leftIcon={<X size={16} />}
-        onClick={onReset}
-        ml="auto"
+      <Input
+        type="date"
+        value={filters.date_from}
+        onChange={(e) => onChange({ date_from: e.target.value })}
+        maxW="170px"
         size="sm"
-      >
-        Tozalash
-      </Button>
+        {...inputStyles}
+      />
+
+      <Input
+        type="date"
+        value={filters.date_to}
+        onChange={(e) => onChange({ date_to: e.target.value })}
+        maxW="170px"
+        size="sm"
+        {...inputStyles}
+      />
     </Flex>
   );
 }
 
-function CarSelector({
+// ---------- Status Cards (show only when toggled) ----------
+function StatusCards({
   cars,
-  carsLoading,
   selectedCarId,
   onCarChange,
-  filters,
-  onFilterChange,
-  onFilterReset,
-  fuelTypes,
-  fuelTypesLoading,
+  carsLoading,
+  showCards,
 }) {
+  if (!showCards) return null; // yashirin, faqat toggle bosilganda ko'rinadi
+
+  if (carsLoading) {
+    return (
+      <Flex gap={4} wrap="wrap" mb={6}>
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} h="80px" w="200px" borderRadius="xl" />
+        ))}
+      </Flex>
+    );
+  }
+
+  return (
+    <Flex gap={4} wrap="wrap" mb={6} align="center">
+      {cars.map((car) => (
+        <Box
+          key={car.id}
+          bg={selectedCarId === car.id ? "primary.50" : "surface"}
+          borderWidth="1px"
+          borderColor={selectedCarId === car.id ? "primary.500" : "border"}
+          borderRadius="xl"
+          px={4}
+          py={3}
+          cursor="pointer"
+          onClick={() => onCarChange(car.id)}
+          transition="all 0.2s ease"
+          _hover={{
+            borderColor: "primary.400",
+            shadow: "md",
+            transform: "translateY(-2px)",
+          }}
+          shadow={selectedCarId === car.id ? "md" : "sm"}
+          minW="180px"
+          flex="1 0 auto"
+        >
+          <HStack spacing={3}>
+            <Avatar
+              size="sm"
+              bg={selectedCarId === car.id ? "primary.100" : "gray.100"}
+              icon={
+                <Car
+                  size={18}
+                  color={selectedCarId === car.id ? "primary.500" : "gray.400"}
+                />
+              }
+            />
+            <Box>
+              <Text
+                fontWeight="medium"
+                fontSize="sm"
+                color="text"
+                noOfLines={1}
+              >
+                {car.label}
+              </Text>
+              <Text fontSize="xs" color="textSecondary">
+                {car.odometer !== null
+                  ? `${formatNumber(car.odometer)} km`
+                  : "—"}
+              </Text>
+            </Box>
+            {selectedCarId === car.id && (
+              <Box ml="auto">
+                <Check size={14} color="var(--chakra-colors-primary-500)" />
+              </Box>
+            )}
+          </HStack>
+        </Box>
+      ))}
+
+      <Box minW="200px" flex="0 0 auto">
+        <Select
+          value={selectedCarId}
+          onChange={(e) => onCarChange(e.target.value)}
+          size="sm"
+          {...inputStyles}
+          placeholder="Mashinani tanlang"
+        >
+          {cars.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}{" "}
+              {c.odometer !== null ? `(${formatNumber(c.odometer)} km)` : ""}
+            </option>
+          ))}
+        </Select>
+      </Box>
+    </Flex>
+  );
+}
+
+// ---------- Filter panel container (always visible) ----------
+function CarSelector({ filters, onFilterChange, fuelTypes, fuelTypesLoading }) {
   return (
     <Box
       bg="surface"
@@ -626,44 +674,9 @@ function CarSelector({
       mb={6}
       w="100%"
     >
-      <FormControl>
-        <FormLabel fontSize="sm" color="textSecondary" fontWeight="semibold">
-          Mashina
-        </FormLabel>
-        {carsLoading ? (
-          <Skeleton
-            h="36px"
-            w={{ base: "100%", md: "320px" }}
-            borderRadius="md"
-          />
-        ) : (
-          <InputGroup maxW={{ base: "100%", md: "320px" }}>
-            <InputLeftElement pointerEvents="none">
-              <Car size={16} color="var(--chakra-colors-textSecondary)" />
-            </InputLeftElement>
-            <Select
-              value={selectedCarId}
-              onChange={(e) => onCarChange(e.target.value)}
-              pl={9}
-              {...inputStyles}
-            >
-              <option value="">Mashinani tanlang</option>
-              {cars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </Select>
-          </InputGroup>
-        )}
-      </FormControl>
-
-      <Divider my={5} borderColor="border" />
-
       <FilterBar
         filters={filters}
         onChange={onFilterChange}
-        onReset={onFilterReset}
         fuelTypes={fuelTypes}
         fuelTypesLoading={fuelTypesLoading}
       />
@@ -671,10 +684,7 @@ function CarSelector({
   );
 }
 
-/**
- * Yoqilg'i sarf normasini (100 km ga necha litr) backend'dan olish
- * car_id va fuel_id bo'yicha
- */
+// ---------- custom hooks ----------
 function useFuelNormRate(carId, fuelId) {
   const [rate, setRate] = useState(null);
 
@@ -723,9 +733,6 @@ function useFuelNormRate(carId, fuelId) {
   return rate;
 }
 
-/**
- * Qoldiqni hisoblash uchun oxirgi yozuvdagi qoldiqni olish
- */
 function useLastBalance(carId) {
   const [lastBalance, setLastBalance] = useState(null);
 
@@ -764,6 +771,7 @@ function useLastBalance(carId) {
   return lastBalance;
 }
 
+// ---------- inline row components ----------
 function NewRowInline({
   newRow,
   onChange,
@@ -893,11 +901,7 @@ function NewRowInline({
       </Td>
 
       <Td isNumeric borderColor="border">
-        <EstimatedCell
-          value={estimatedSum}
-          unit="so'm"
-          tooltip="Avtomatik hisoblanadi"
-        />
+        <EstimatedCell value={estimatedSum} unit="so'm" />
       </Td>
 
       <Td isNumeric borderColor="border">
@@ -987,15 +991,13 @@ function EditRowInline({
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
       <Td borderColor="border" py={2}>
-        <InputGroup size="sm">
-          <InputLeftElement pointerEvents="none">
-            <CalendarDays
-              size={14}
-              color="var(--chakra-colors-textSecondary)"
-            />
-          </InputLeftElement>
-          <Input value={editForm.date} isDisabled pl={8} {...inputStyles} />
-        </InputGroup>
+        <Input
+          type="date"
+          size="sm"
+          value={editForm.date}
+          onChange={(e) => onChange({ date: e.target.value })}
+          {...inputStyles}
+        />
       </Td>
 
       <Td borderColor="border">
@@ -1061,11 +1063,7 @@ function EditRowInline({
       </Td>
 
       <Td isNumeric borderColor="border">
-        <EstimatedCell
-          value={computedBalanceAfter}
-          unit={selectedUnit}
-          tooltip="Avtomatik hisoblanadi"
-        />
+        <EstimatedCell value={computedBalanceAfter} unit={selectedUnit} />
       </Td>
 
       <Td borderColor="border">
@@ -1116,6 +1114,7 @@ function DataRow({
   editingId,
   onStartEdit,
   onDelete,
+  isLastRow,
 }) {
   const { distance, fuelConsumed, sum, balanceAfter } = extractComputed(row);
 
@@ -1135,6 +1134,8 @@ function DataRow({
         ? Number(row.received_amount) * fuelPrice
         : null;
   const sumIsComputedLocally = sum === null && displaySum !== null;
+
+  const showActions = isLastRow && editingId === null;
 
   return (
     <Tr
@@ -1201,47 +1202,46 @@ function DataRow({
       </Td>
 
       <Td borderColor="border">
-        {row.is_holiday ? (
-          <Badge colorScheme="accent" variant="subtle" borderRadius="md">
-            Dam olish
-          </Badge>
-        ) : (
-          <Text color="textSecondary" fontSize="sm">
-            —
-          </Text>
-        )}
+        <HolidayBadge isHoliday={row.is_holiday} />
       </Td>
 
       <Td borderColor="border">
-        <HStack spacing={1}>
-          <IconButton
-            aria-label="Tahrirlash"
-            icon={<Pencil size={14} />}
-            size="sm"
-            variant="ghost"
-            borderRadius="md"
-            color="blue.500"
-            _hover={{ bg: "blue.50", color: "blue.600" }}
-            onClick={() => onStartEdit(row)}
-            isDisabled={editingId !== null}
-          />
-          <IconButton
-            aria-label="O'chirish"
-            icon={<Trash2 size={14} />}
-            size="sm"
-            variant="ghost"
-            borderRadius="md"
-            color="red.500"
-            _hover={{ bg: "red.50", color: "red.600" }}
-            onClick={() => onDelete(row)}
-            isDisabled={editingId !== null}
-          />
-        </HStack>
+        {showActions ? (
+          <HStack spacing={1}>
+            <IconButton
+              aria-label="Tahrirlash"
+              icon={<Pencil size={14} />}
+              size="sm"
+              variant="ghost"
+              borderRadius="md"
+              color="blue.500"
+              _hover={{ bg: "blue.50", color: "blue.600" }}
+              onClick={() => onStartEdit(row)}
+              isDisabled={editingId !== null}
+            />
+            <IconButton
+              aria-label="O'chirish"
+              icon={<Trash2 size={14} />}
+              size="sm"
+              variant="ghost"
+              borderRadius="md"
+              color="red.500"
+              _hover={{ bg: "red.50", color: "red.600" }}
+              onClick={() => onDelete(row)}
+              isDisabled={editingId !== null}
+            />
+          </HStack>
+        ) : (
+          <Text color="textSecondary" fontSize="xs" textAlign="center">
+            —
+          </Text>
+        )}
       </Td>
     </Tr>
   );
 }
 
+// ---------- main table ----------
 function ExpenseTable({
   items,
   loading,
@@ -1280,67 +1280,22 @@ function ExpenseTable({
           Olingan
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="110px">
-          <Tooltip label="Avtomatik hisoblanadi" hasArrow>
-            <Text
-              as="span"
-              borderBottom="1px dashed"
-              borderColor="textSecondary"
-              cursor="default"
-            >
-              Sarflangan
-            </Text>
-          </Tooltip>
+          Sarflangan
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
-          <Tooltip label="Avtomatik hisoblanadi" hasArrow>
-            <Text
-              as="span"
-              borderBottom="1px dashed"
-              borderColor="textSecondary"
-              cursor="default"
-            >
-              Spidometr (boshi)
-            </Text>
-          </Tooltip>
+          Spidometr (boshi)
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
-          <Tooltip label="Avtomatik hisoblanadi" hasArrow>
-            <Text
-              as="span"
-              borderBottom="1px dashed"
-              borderColor="textSecondary"
-              cursor="default"
-            >
-              Spidometr (oxiri)
-            </Text>
-          </Tooltip>
+          Spidometr (oxiri)
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
           Yurgan (km)
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="120px">
-          <Tooltip label="Avtomatik hisoblanadi" hasArrow>
-            <Text
-              as="span"
-              borderBottom="1px dashed"
-              borderColor="textSecondary"
-              cursor="default"
-            >
-              Summa (so'm)
-            </Text>
-          </Tooltip>
+          Summa (so'm)
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="110px">
-          <Tooltip label="Avtomatik hisoblanadi" hasArrow>
-            <Text
-              as="span"
-              borderBottom="1px dashed"
-              borderColor="textSecondary"
-              cursor="default"
-            >
-              Qoldiq
-            </Text>
-          </Tooltip>
+          Qoldiq
         </Th>
         <Th color="textSecondary" borderColor="border" minW="100px">
           Holat
@@ -1353,6 +1308,8 @@ function ExpenseTable({
   );
 
   const renderRow = (row, idx) => {
+    const isLast = idx === items.length - 1;
+
     if (row.id === editingId) {
       return (
         <EditRowInline
@@ -1376,6 +1333,7 @@ function ExpenseTable({
         editingId={editingId}
         onStartEdit={onStartEdit}
         onDelete={onDelete}
+        isLastRow={isLast}
       />
     );
   };
@@ -1421,6 +1379,7 @@ function ExpenseTable({
   );
 }
 
+// ---------- delete dialog ----------
 function DeleteConfirmDialog({
   isOpen,
   onClose,
@@ -1435,23 +1394,60 @@ function DeleteConfirmDialog({
       isOpen={isOpen}
       leastDestructiveRef={cancelRef}
       onClose={onClose}
+      isCentered
     >
-      <AlertDialogOverlay>
-        <AlertDialogContent bg="surface" color="text">
-          <AlertDialogHeader display="flex" alignItems="center" gap={2}>
-            <AlertTriangle size={18} color="var(--chakra-colors-danger)" />
-            Yozuvni o'chirish
+      <AlertDialogOverlay bg="blackAlpha.400" backdropFilter="blur(3px)">
+        <AlertDialogContent borderRadius="xl" bg="surface" boxShadow="2xl">
+          <AlertDialogHeader
+            bg="surfBlur"
+            borderTopRadius="xl"
+            borderBottom="1px solid"
+            borderColor="border"
+            fontSize="lg"
+            color="text"
+            display="flex"
+            alignItems="center"
+            gap={2}
+          >
+            <AlertTriangle size={18} color="var(--chakra-colors-red-500)" />
+            O'chirishni tasdiqlang
           </AlertDialogHeader>
-          <AlertDialogBody color="textSecondary">
-            {target ? formatDate(target.date) : ""} sanadagi yozuvni
-            o'chirmoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi.
+          <AlertDialogBody bg="bg" py={4}>
+            <Text color="text">
+              Siz rostdan ham{" "}
+              <Text as="span" fontWeight="700">
+                {target ? formatDate(target.date) : ""}
+              </Text>{" "}
+              sanadagi yoqilg'i ma'lumotini o'chirmoqchimisiz?
+            </Text>
+            <Text mt={2} fontSize="sm" color="textSecondary">
+              Ushbu amalni ortga qaytarib bo'lmaydi.
+            </Text>
           </AlertDialogBody>
-          <AlertDialogFooter gap={3}>
-            <Button ref={cancelRef} variant="ghost" onClick={onClose}>
+          <AlertDialogFooter
+            borderTop="1px solid"
+            borderColor="border"
+            bg="surfBlur"
+            borderBottomRadius="xl"
+          >
+            <Button
+              ref={cancelRef}
+              size="sm"
+              variant="outline"
+              borderColor="border"
+              color="text"
+              _hover={{ bg: "blackAlpha.50" }}
+              mr={3}
+              onClick={onClose}
+              isDisabled={isDeleting}
+            >
               Bekor qilish
             </Button>
             <Button
-              colorScheme="red"
+              size="sm"
+              bg="red.500"
+              color="white"
+              _hover={{ bg: "red.600" }}
               onClick={onConfirm}
               isLoading={isDeleting}
             >
@@ -1464,20 +1460,25 @@ function DeleteConfirmDialog({
   );
 }
 
+// ---------- defaults ----------
 const DEFAULT_FILTERS = {
   fuel_id: "",
-  date_from: "",
-  date_to: "",
+  date_from: getMonthStartDate(),
+  date_to: getTodayDate(),
   sortBy: "date",
   sortOrder: "ASC",
 };
 
+// ============================================================
+// ASOSIY KOMPONENT – CostPage
+// ============================================================
 function CostPage() {
   const toast = useToast();
 
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
   const [selectedCarId, setSelectedCarId] = useState("");
+  const [showCards, setShowCards] = useState(false); // default: yashirin
 
   const loadCars = useCallback(async () => {
     setCarsLoading(true);
@@ -1509,19 +1510,15 @@ function CostPage() {
     } finally {
       setCarsLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadCars();
   }, [loadCars]);
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
 
   const [expenses, setExpenses] = useState([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const [fuelTypes, setFuelTypes] = useState([]);
@@ -1552,8 +1549,7 @@ function CostPage() {
     } finally {
       setFuelTypesLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadFuelTypes();
@@ -1569,8 +1565,7 @@ function CostPage() {
     if (fuelTypes.length && !newRow.fuel_id) {
       setNewRow((prev) => ({ ...prev, fuel_id: fuelTypes[0].id }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fuelTypes]);
+  }, [fuelTypes, newRow.fuel_id]);
 
   const updateNewRow = (patch) => {
     setNewRow((prev) => ({ ...prev, ...patch }));
@@ -1585,20 +1580,12 @@ function CostPage() {
   const deleteDialog = useDisclosure();
 
   const updateFilters = (patch) => {
-    setPage(1);
     setFilters((prev) => ({ ...prev, ...patch }));
-  };
-
-  const resetFilters = () => {
-    setPage(1);
-    setFilters(DEFAULT_FILTERS);
   };
 
   const handleCarChange = (id) => {
     setSelectedCarId(id);
-    setPage(1);
     setExpenses([]);
-    setTotal(0);
     setEditingId(null);
     setNewRow({
       ...EMPTY_NEW_ROW,
@@ -1610,12 +1597,11 @@ function CostPage() {
   const loadExpenses = useCallback(async () => {
     if (!selectedCarId) {
       setExpenses([]);
-      setTotal(0);
       return;
     }
     setLoading(true);
     try {
-      const data = await apiCost.All(page, limit, {
+      const data = await apiCost.All(1, FETCH_LIMIT, {
         car_id: selectedCarId,
         fuel_id: filters.fuel_id,
         date_from: filters.date_from,
@@ -1624,7 +1610,6 @@ function CostPage() {
         sortOrder: filters.sortOrder,
       });
       setExpenses(extractList(data));
-      setTotal(pick(data, ["total", "count"], 0));
     } catch (err) {
       toast({
         title: "Ro'yxatni yuklab bo'lmadi",
@@ -1635,14 +1620,13 @@ function CostPage() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCarId, page, limit, filters]);
+  }, [selectedCarId, filters, toast]);
 
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses]);
 
-  // Yangi qator uchun "Spidometr (boshi)"ni avtomatik to'ldirish:
+  // auto-fill odometer start
   useEffect(() => {
     if (!selectedCarId) return;
     if (loading) return;
@@ -1671,8 +1655,7 @@ function CostPage() {
         odometer_start: String(car.odometer),
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCarId, expenses, loading, cars]);
+  }, [selectedCarId, expenses, loading, cars, newRow.odometer_start]);
 
   const handleAddRow = async () => {
     if (!selectedCarId) {
@@ -1697,6 +1680,17 @@ function CostPage() {
           "Sana, yoqilg'i turi, necha km yurgan va olingan miqdor kerak",
         status: "warning",
         duration: 3500,
+      });
+      return;
+    }
+
+    if (isFutureDate(newRow.date)) {
+      toast({
+        title: "Xatolik",
+        description:
+          "Ertangi kun uchun ma'lumot qo'shib bo'lmaydi! Faqat bugungi yoki o'tgan kunlar uchun yozuv qo'shishingiz mumkin.",
+        status: "error",
+        duration: 4000,
       });
       return;
     }
@@ -1730,7 +1724,6 @@ function CostPage() {
       const created = extractSingle(response);
       if (created && created.id !== undefined) {
         setExpenses((prev) => [...prev, created]);
-        setTotal((prev) => prev + 1);
       }
 
       toast({
@@ -1792,6 +1785,16 @@ function CostPage() {
         title: "Yurgan km va olingan miqdor kerak",
         status: "warning",
         duration: 3000,
+      });
+      return;
+    }
+
+    if (isFutureDate(editForm.date)) {
+      toast({
+        title: "Xatolik",
+        description: "Ertangi kun uchun ma'lumot tahrirlab bo'lmaydi!",
+        status: "error",
+        duration: 4000,
       });
       return;
     }
@@ -1865,9 +1868,9 @@ function CostPage() {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / limit));
   const noCarSelected = !selectedCarId;
 
+  // ========== RENDER ==========
   return (
     <Box
       bg="bg"
@@ -1877,32 +1880,53 @@ function CostPage() {
       px={{ base: 3, md: 5, xl: 6 }}
       py={{ base: 4, md: 8 }}
     >
+      {/* Sarlavha va toggle */}
       <Box mb={6}>
-        <Heading
-          size="xl"
-          color="text"
-          fontWeight="extrabold"
-          letterSpacing="tight"
-        >
-          Xarajatlar
-        </Heading>
-        <Text color="textSecondary" fontSize="md" mt={1}>
-          Mashinaning kunlik yoqilg'i xarajatlari va sarf statistikasi
-        </Text>
+        <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
+          <Box>
+            <Heading
+              size="xl"
+              color="text"
+              fontWeight="extrabold"
+              letterSpacing="tight"
+            >
+              Xarajatlar
+            </Heading>
+            <Text color="textSecondary" fontSize="md" mt={1}>
+              Mashinaning kunlik yoqilg'i xarajatlari va sarf statistikasi
+            </Text>
+          </Box>
+          <IconButton
+            aria-label="Mashinalarni ko'rsatish"
+            icon={showCards ? <LayoutGrid size={18} /> : <List size={18} />}
+            size="sm"
+            variant={showCards ? "solid" : "outline"}
+            colorScheme={showCards ? "primary" : "gray"}
+            onClick={() => setShowCards(!showCards)}
+            borderRadius="md"
+            borderColor="border"
+          />
+        </Flex>
       </Box>
 
+      {/* FILTER PANEL – always visible */}
       <CarSelector
-        cars={cars}
-        carsLoading={carsLoading}
-        selectedCarId={selectedCarId}
-        onCarChange={handleCarChange}
         filters={filters}
         onFilterChange={updateFilters}
-        onFilterReset={resetFilters}
         fuelTypes={fuelTypes}
         fuelTypesLoading={fuelTypesLoading}
       />
 
+      {/* CAR CARDS – visible only when toggled */}
+      <StatusCards
+        cars={cars}
+        selectedCarId={selectedCarId}
+        onCarChange={handleCarChange}
+        carsLoading={carsLoading}
+        showCards={showCards}
+      />
+
+      {/* TABLE */}
       <Box
         bg="surface"
         borderRadius="2xl"
@@ -1911,95 +1935,29 @@ function CostPage() {
         boxShadow="md"
         overflow="hidden"
         w="100%"
+        mt={6}
       >
-        <Box>
-          <ExpenseTable
-            items={expenses}
-            loading={loading}
-            fuelTypesById={fuelTypesById}
-            noCarSelected={noCarSelected}
-            newRow={newRow}
-            onNewRowChange={updateNewRow}
-            onAddRow={handleAddRow}
-            isSavingRow={isSavingRow}
-            fuelTypes={fuelTypes}
-            fuelTypesLoading={fuelTypesLoading}
-            editingId={editingId}
-            editForm={editForm}
-            onEditFormChange={updateEditForm}
-            onStartEdit={startEdit}
-            onSaveEdit={saveEdit}
-            onCancelEdit={cancelEdit}
-            isSavingEdit={isSavingEdit}
-            onDelete={askDelete}
-            selectedCarId={selectedCarId}
-          />
-
-          {!noCarSelected && !loading && expenses.length > 0 && (
-            <>
-              <Divider borderColor="border" />
-              <Flex
-                justify="space-between"
-                align="center"
-                px={{ base: 5, md: 8 }}
-                py={4}
-                wrap="wrap"
-                gap={3}
-              >
-                <HStack fontSize="sm" color="textSecondary">
-                  <Text>Jami: {formatNumber(total)} ta yozuv</Text>
-                  <Select
-                    size="sm"
-                    w="110px"
-                    borderRadius="md"
-                    value={limit}
-                    onChange={(e) => {
-                      setPage(1);
-                      setLimit(Number(e.target.value));
-                    }}
-                    {...inputStyles}
-                  >
-                    {PAGE_SIZE_OPTIONS.map((n) => (
-                      <option key={n} value={n}>
-                        {n} / sahifa
-                      </option>
-                    ))}
-                  </Select>
-                </HStack>
-
-                <HStack>
-                  <IconButton
-                    aria-label="Oldingi sahifa"
-                    icon={<ChevronLeft size={16} />}
-                    size="sm"
-                    variant="outline"
-                    borderRadius="md"
-                    isDisabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  />
-                  <Text
-                    fontSize="sm"
-                    color="textSecondary"
-                    minW="70px"
-                    textAlign="center"
-                    fontWeight="medium"
-                  >
-                    {page} / {totalPages}
-                  </Text>
-                  <IconButton
-                    aria-label="Keyingi sahifa"
-                    icon={<ChevronRight size={16} />}
-                    size="sm"
-                    variant="outline"
-                    borderRadius="md"
-                    isDisabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  />
-                </HStack>
-              </Flex>
-            </>
-          )}
-        </Box>
+        <ExpenseTable
+          items={expenses}
+          loading={loading}
+          fuelTypesById={fuelTypesById}
+          noCarSelected={noCarSelected}
+          newRow={newRow}
+          onNewRowChange={updateNewRow}
+          onAddRow={handleAddRow}
+          isSavingRow={isSavingRow}
+          fuelTypes={fuelTypes}
+          fuelTypesLoading={fuelTypesLoading}
+          editingId={editingId}
+          editForm={editForm}
+          onEditFormChange={updateEditForm}
+          onStartEdit={startEdit}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          isSavingEdit={isSavingEdit}
+          onDelete={askDelete}
+          selectedCarId={selectedCarId}
+        />
       </Box>
 
       <DeleteConfirmDialog
