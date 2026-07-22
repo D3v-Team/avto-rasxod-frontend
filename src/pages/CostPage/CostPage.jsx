@@ -51,9 +51,6 @@ import {
   ArrowUpDown,
   AlertTriangle,
   Car,
-  Gauge,
-  TrendingUp,
-  Wallet,
 } from "lucide-react";
 import { apiCost } from "../../Services/api/apiCost";
 import { apiFuel } from "../../Services/api/Fuels";
@@ -61,12 +58,20 @@ import { apiCars } from "../../Services/api/Cars";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-// Foydalanuvchi qo'lda kiritadigan maydonlar
+// Hozirgi kunni formatlash
+const getTodayDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const EMPTY_NEW_ROW = {
-  date: "",
+  date: getTodayDate(),
   fuel_id: "",
   odometer_start: "",
-  odometer_end: "",
+  distance: "",
   received_amount: "",
   is_holiday: false,
 };
@@ -75,20 +80,45 @@ const EMPTY_EDIT_FORM = {
   date: "",
   fuel_id: "",
   odometer_start: "",
-  odometer_end: "",
+  distance: "",
   received_amount: "",
   is_holiday: false,
 };
 
-const FUEL_COLOR_MAP = {
-  benzin: "amber",
-  gaz: "secondary",
-  gas: "secondary",
-  dizel: "neutral",
-  diesel: "neutral",
-  propan: "success",
-  metan: "primary",
+// Yoqilg'i turlari va ularning unitlari
+const FUEL_UNIT_MAP = {
+  "AI 100": "litr",
+  "AI-100": "litr",
+  AI100: "litr",
+  "AI 93": "litr",
+  "AI-93": "litr",
+  AI93: "litr",
+  dizel: "litr",
+  "dizel EKO": "litr",
+  "dizel-eko": "litr",
+  elektr: "kwh",
+  electric: "kwh",
+  metan: "m3",
+  methane: "m3",
 };
+
+// Yoqilg'i turlari ranglari
+const FUEL_COLOR_MAP = {
+  "AI 100": "purple",
+  "AI-100": "purple",
+  AI100: "purple",
+  "AI 93": "amber",
+  "AI-93": "amber",
+  AI93: "amber",
+  dizel: "neutral",
+  "dizel EKO": "green",
+  "dizel-eko": "green",
+  elektr: "cyan",
+  electric: "cyan",
+  metan: "primary",
+  methane: "primary",
+};
+
 const FUEL_COLOR_PALETTE = [
   "amber",
   "secondary",
@@ -96,12 +126,107 @@ const FUEL_COLOR_PALETTE = [
   "success",
   "primary",
   "neutral",
+  "purple",
+  "orange",
+  "green",
+  "cyan",
 ];
 
 function getFuelColorScheme(rawName, index) {
+  if (!rawName) return FUEL_COLOR_PALETTE[index % FUEL_COLOR_PALETTE.length];
+
   const key = (rawName || "").toString().trim().toLowerCase();
-  if (FUEL_COLOR_MAP[key]) return FUEL_COLOR_MAP[key];
+
+  // To'g'ridan-to'g'ri nom bo'yicha qidirish
+  for (const [fuelName, color] of Object.entries(FUEL_COLOR_MAP)) {
+    if (
+      key === fuelName.toLowerCase() ||
+      key.toLowerCase() === fuelName.toLowerCase()
+    ) {
+      return color;
+    }
+  }
+
+  // Qisman moslik
+  if (
+    key.includes("ai 100") ||
+    key.includes("ai-100") ||
+    key.includes("ai100")
+  ) {
+    return "purple";
+  }
+  if (key.includes("ai 93") || key.includes("ai-93") || key.includes("ai93")) {
+    return "amber";
+  }
+  if (key.includes("dizel eko") || key.includes("dizel-eko")) {
+    return "green";
+  }
+  if (key.includes("dizel")) {
+    return "neutral";
+  }
+  if (key.includes("elektr") || key.includes("electric")) {
+    return "cyan";
+  }
+  if (key.includes("metan") || key.includes("methane")) {
+    return "primary";
+  }
+
   return FUEL_COLOR_PALETTE[index % FUEL_COLOR_PALETTE.length];
+}
+
+// Yoqilg'i nomi bo'yicha birlikni aniqlash:
+// AI 100 / AI 93 / dizel / dizel EKO -> litr
+// elektr -> kwh
+// metan -> m3
+function getFuelUnit(rawName) {
+  if (!rawName) return "litr";
+
+  const key = (rawName || "").toString().trim();
+
+  // To'g'ridan-to'g'ri nom bo'yicha qidirish
+  for (const [fuelName, unit] of Object.entries(FUEL_UNIT_MAP)) {
+    if (key === fuelName || key.toLowerCase() === fuelName.toLowerCase()) {
+      return unit;
+    }
+  }
+
+  // Qisman moslikni tekshirish
+  const lowerKey = key.toLowerCase();
+
+  // Elektr -> kwh (eng avval tekshiramiz, chunki boshqa so'zlar bilan aralashmasligi kerak)
+  if (lowerKey.includes("elektr") || lowerKey.includes("electric")) {
+    return "kwh";
+  }
+
+  // Metan -> m3
+  if (lowerKey.includes("metan") || lowerKey.includes("methane")) {
+    return "m3";
+  }
+
+  // AI 100, AI-100, AI100 -> litr
+  if (
+    lowerKey.includes("ai 100") ||
+    lowerKey.includes("ai-100") ||
+    lowerKey.includes("ai100")
+  ) {
+    return "litr";
+  }
+
+  // AI 93, AI-93, AI93 -> litr
+  if (
+    lowerKey.includes("ai 93") ||
+    lowerKey.includes("ai-93") ||
+    lowerKey.includes("ai93")
+  ) {
+    return "litr";
+  }
+
+  // Dizel / dizel EKO -> litr
+  if (lowerKey.includes("dizel")) {
+    return "litr";
+  }
+
+  return "litr"; // default
 }
 
 function pick(obj, keys, fallback = 0) {
@@ -119,8 +244,6 @@ function extractList(payload) {
   return [];
 }
 
-// Create/Update javobi { data: {...} }, { item: {...} } yoki to'g'ridan-to'g'ri
-// obyekt shaklida kelishi mumkin — hammasini qamrab olamiz.
 function extractSingle(payload) {
   if (!payload) return null;
   if (payload.id !== undefined) return payload;
@@ -132,19 +255,20 @@ function extractSingle(payload) {
 function normalizeFuelType(raw, index) {
   const id = pick(raw, ["id", "_id", "uuid"], null);
   const label = pick(raw, ["name", "label", "title"], id ?? "Noma'lum");
-  const unit = pick(raw, ["unit", "measure", "measure_unit"], "litr");
-  // Yoqilg'i narxi — Summani saqlashdan oldin taxminiy ko'rsatish uchun.
-  // Agar backend javobida narx boshqacha nom bilan kelsa, shu ro'yxatga
-  // o'sha nomni qo'shib qo'ying.
+
+  // Unitni yoqilg'i nomiga qarab aniqlaymiz (litr / kwh / m3)
+  const unit = getFuelUnit(label);
+
   const price = pick(
     raw,
     ["price", "unit_price", "cost_per_unit", "price_per_unit", "narx"],
     null,
   );
+
   return {
     id,
     label: String(label),
-    unit: String(unit),
+    unit: unit,
     price: price !== null && price !== undefined ? Number(price) : null,
     colorScheme: getFuelColorScheme(label, index),
   };
@@ -158,8 +282,6 @@ function normalizeCar(raw) {
     ["plate_number", "gov_number", "number", "plate"],
     null,
   );
-  // Mashinaning joriy spidometr (probeg) ko'rsatkichi — yangi xarajat
-  // qatorida "Spidometr (boshi)"ni avtomatik to'ldirish uchun kerak.
   const odometer = pick(
     raw,
     [
@@ -183,10 +305,6 @@ function normalizeCar(raw) {
   };
 }
 
-// Backend javobidagi hisoblangan (avtomatik) maydonlarni bitta joyda,
-// eng ko'p uchraydigan barcha nomlanish variantlari bilan o'qiymiz.
-// Agar Swagger response-schema sizda boshqacha nom bersa, shu yerga
-// o'sha nomni qo'shib qo'yish kifoya — boshqa joyni o'zgartirish shart emas.
 function extractComputed(row) {
   return {
     distance: pick(
@@ -247,7 +365,6 @@ function formatDate(value) {
   return d.toLocaleDateString("uz-UZ");
 }
 
-// Oddiy, flat uslubdagi inputlar
 const inputStyles = {
   bg: "surface",
   color: "text",
@@ -305,7 +422,6 @@ function UnitNumberInput({
   );
 }
 
-// Avtomatik hisoblanadigan (backend'dan keladigan, qo'lda kiritilmaydigan) qiymat uchun katak
 function AutoCell({ value, unit, tooltip }) {
   return (
     <Tooltip label={tooltip} placement="top" hasArrow openDelay={300}>
@@ -318,11 +434,14 @@ function AutoCell({ value, unit, tooltip }) {
   );
 }
 
-// Backend hali saqlamagan bo'lsa ham, agar taxminiy (estimated) qiymat
-// mavjud bo'lsa (masalan narx orqali hisoblangan summa), uni "~" belgisi
-// bilan ko'rsatamiz. Aks holda oddiy AutoCell kabi "—" chiqadi.
+// Taxminiy qiymatlar endi "~" belgisisiz ko'rsatiladi
 function EstimatedCell({ value, unit, tooltip }) {
-  if (value === null || value === undefined || value === "") {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    Number.isNaN(value)
+  ) {
     return <AutoCell value={null} tooltip={tooltip} />;
   }
   return (
@@ -333,7 +452,7 @@ function EstimatedCell({ value, unit, tooltip }) {
       openDelay={300}
     >
       <Text color="text" fontSize="sm" fontWeight="semibold" cursor="default">
-        ~{formatNumber(value)}
+        {formatNumber(value)}
         {unit ? ` ${unit}` : ""}
       </Text>
     </Tooltip>
@@ -404,7 +523,6 @@ function NoCarState() {
   );
 }
 
-// Filtr paneli
 function FilterBar({
   filters,
   onChange,
@@ -450,16 +568,27 @@ function FilterBar({
         </Select>
       )}
 
-      <IconButton
-        aria-label="Tartibni almashtirish"
-        icon={<ArrowUpDown size={16} />}
-        variant="outline"
-        size="sm"
-        borderRadius="md"
-        onClick={() =>
-          onChange({ sortOrder: filters.sortOrder === "ASC" ? "DESC" : "ASC" })
+      <Tooltip
+        label={
+          filters.sortOrder === "ASC"
+            ? "Eski sanalar tepada (o'sish tartibi)"
+            : "Yangi sanalar tepada (kamayish tartibi)"
         }
-      />
+        hasArrow
+      >
+        <IconButton
+          aria-label="Sana tartibini almashtirish"
+          icon={<ArrowUpDown size={16} />}
+          variant="outline"
+          size="sm"
+          borderRadius="md"
+          onClick={() =>
+            onChange({
+              sortOrder: filters.sortOrder === "ASC" ? "DESC" : "ASC",
+            })
+          }
+        />
+      </Tooltip>
 
       <Button
         variant="ghost"
@@ -474,7 +603,6 @@ function FilterBar({
   );
 }
 
-// Mashina tanlash kartasi + filtr qatori
 function CarSelector({
   cars,
   carsLoading,
@@ -544,22 +672,98 @@ function CarSelector({
 }
 
 /**
- * Jadval ustunlari tartibi (chapdan o'ngga), ixcham va tushunarli bo'lishi uchun:
- * 1. Sana
- * 2. Yoqilg'i turi
- * 3. Olingan yoqilg'i        -> QO'LDA kiritiladi
- * 4. Sarflangan yoqilg'i     -> AVTOMATIK (backend)
- * 5. Spidometr: boshi        -> QO'LDA kiritiladi (lekin oldingi yozuvdan
- *    avtomatik oldindan to'ldiriladi, foydalanuvchi xohlasa o'zgartirishi mumkin)
- * 6. Spidometr: oxiri        -> QO'LDA kiritiladi
- * 7. Necha km yurgan         -> AVTOMATIK (backend, frontendda ham zaxira hisob)
- * 8. Summasi                 -> AVTOMATIK (backend), narx bo'lsa taxminiy ko'rsatiladi
- * 9. Yoqilg'i qoldig'i       -> AVTOMATIK (backend)
- * 10. Holat (dam olish)      -> QO'LDA kiritiladi (switch)
- * 11. Amallar
+ * Yoqilg'i sarf normasini (100 km ga necha litr) backend'dan olish
+ * car_id va fuel_id bo'yicha
  */
+function useFuelNormRate(carId, fuelId) {
+  const [rate, setRate] = useState(null);
 
-// Jadval ichidagi "yangi qo'shish" qatori
+  useEffect(() => {
+    if (!carId || !fuelId) {
+      setRate(null);
+      return;
+    }
+    let cancelled = false;
+
+    apiCars
+      .AllNorms(1, 1, carId, fuelId)
+      .then((response) => {
+        if (cancelled) return;
+        const list = extractList(response?.data);
+        const normRaw = list[0];
+        if (!normRaw) {
+          setRate(null);
+          return;
+        }
+        const r = pick(
+          normRaw,
+          [
+            "rate",
+            "norm",
+            "consumption_rate",
+            "fuel_per_100km",
+            "norm_per_100km",
+            "consumption_per_100km",
+            "rate_100km",
+            "norm_100",
+          ],
+          null,
+        );
+        setRate(r !== null ? Number(r) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setRate(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [carId, fuelId]);
+
+  return rate;
+}
+
+/**
+ * Qoldiqni hisoblash uchun oxirgi yozuvdagi qoldiqni olish
+ */
+function useLastBalance(carId) {
+  const [lastBalance, setLastBalance] = useState(null);
+
+  useEffect(() => {
+    if (!carId) {
+      setLastBalance(null);
+      return;
+    }
+    let cancelled = false;
+
+    apiCost
+      .All(1, 1, {
+        car_id: carId,
+        sortBy: "date",
+        sortOrder: "DESC",
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const list = extractList(response);
+        if (list.length > 0) {
+          const computed = extractComputed(list[0]);
+          setLastBalance(computed.balanceAfter);
+        } else {
+          setLastBalance(0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLastBalance(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [carId]);
+
+  return lastBalance;
+}
+
 function NewRowInline({
   newRow,
   onChange,
@@ -569,6 +773,7 @@ function NewRowInline({
   fuelTypesLoading,
   fuelTypesById,
   disabled,
+  selectedCarId,
 }) {
   const rowBg = useColorModeValue("primary.50", "whiteAlpha.100");
   const rowBorder = useColorModeValue("primary.100", "whiteAlpha.200");
@@ -576,10 +781,29 @@ function NewRowInline({
   const fuelMeta = fuelTypesById?.[newRow.fuel_id];
   const selectedUnit = fuelMeta?.unit || "litr";
 
-  // Yoqilg'i narxi ma'lum bo'lsa, Summani saqlashdan oldin taxminiy hisoblab beramiz.
   const estimatedSum =
     fuelMeta?.price && newRow.received_amount !== ""
       ? Number(newRow.received_amount) * Number(fuelMeta.price)
+      : null;
+
+  const hasDistance = newRow.distance !== "" && Number(newRow.distance) > 0;
+  const computedOdometerEnd =
+    newRow.odometer_start !== "" && hasDistance
+      ? Number(newRow.odometer_start) + Number(newRow.distance)
+      : null;
+
+  const normRate = useFuelNormRate(selectedCarId, newRow.fuel_id);
+  const estimatedFuelConsumed =
+    normRate !== null && hasDistance
+      ? (Number(newRow.distance) * normRate) / 100
+      : null;
+
+  const lastBalance = useLastBalance(selectedCarId);
+  const computedBalanceAfter =
+    lastBalance !== null && newRow.received_amount !== "" && hasDistance
+      ? Number(lastBalance) +
+        Number(newRow.received_amount) -
+        (estimatedFuelConsumed || 0)
       : null;
 
   const isValid =
@@ -587,13 +811,11 @@ function NewRowInline({
     newRow.date &&
     newRow.fuel_id &&
     newRow.odometer_start !== "" &&
-    newRow.odometer_end !== "" &&
-    newRow.received_amount !== "" &&
-    Number(newRow.odometer_end) > Number(newRow.odometer_start);
+    hasDistance &&
+    newRow.received_amount !== "";
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
-      {/* 1. Sana */}
       <Td borderColor="border" py={2}>
         <Input
           type="date"
@@ -605,7 +827,6 @@ function NewRowInline({
         />
       </Td>
 
-      {/* 2. Yoqilg'i turi */}
       <Td borderColor="border">
         {fuelTypesLoading ? (
           <Skeleton h="32px" borderRadius="md" />
@@ -627,7 +848,6 @@ function NewRowInline({
         )}
       </Td>
 
-      {/* 3. Olingan yoqilg'i — QO'LDA */}
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={newRow.received_amount}
@@ -638,68 +858,56 @@ function NewRowInline({
         />
       </Td>
 
-      {/* 4. Sarflangan yoqilg'i — AVTOMATIK */}
+      <Td isNumeric borderColor="border">
+        <EstimatedCell
+          value={estimatedFuelConsumed}
+          unit={selectedUnit}
+          tooltip="Sarf normasi orqali taxminiy hisoblanadi"
+        />
+      </Td>
+
       <Td isNumeric borderColor="border">
         <AutoCell
-          value={null}
-          tooltip="Avtomatik hisoblanadi (saqlangach ko'rinadi)"
-        />
-      </Td>
-
-      {/* 5. Spidometr boshi — QO'LDA, lekin oldingi yozuvdan avtomatik to'ldiriladi */}
-      <Td isNumeric borderColor="border">
-        <UnitNumberInput
           value={newRow.odometer_start}
-          onChange={(val) => onChange({ odometer_start: val })}
-          isDisabled={disabled}
           unit="km"
-          size="sm"
+          tooltip="Avtomatik: oldingi yozuvning oxirgi spidometridan olinadi"
         />
       </Td>
 
-      {/* 6. Spidometr oxiri — QO'LDA */}
+      <Td isNumeric borderColor="border">
+        <AutoCell
+          value={computedOdometerEnd}
+          unit="km"
+          tooltip="Avtomatik: spidometr boshi + yurgan km"
+        />
+      </Td>
+
       <Td isNumeric borderColor="border">
         <UnitNumberInput
-          value={newRow.odometer_end}
-          onChange={(val) => onChange({ odometer_end: val })}
+          value={newRow.distance}
+          onChange={(val) => onChange({ distance: val })}
           isDisabled={disabled}
           unit="km"
           size="sm"
         />
       </Td>
 
-      {/* 7. Necha km yurgan — foydalanuvchi kiritgan ikkita spidometrdan darhol
-          hisoblab ko'rsatamiz (frontend'da), yakuniy qiymat saqlangach backend qaytaradi */}
-      <Td isNumeric borderColor="border">
-        <Text color="textSecondary" fontSize="sm">
-          {newRow.odometer_start !== "" &&
-          newRow.odometer_end !== "" &&
-          Number(newRow.odometer_end) > Number(newRow.odometer_start)
-            ? `${formatNumber(
-                Number(newRow.odometer_end) - Number(newRow.odometer_start),
-              )} km`
-            : "—"}
-        </Text>
-      </Td>
-
-      {/* 8. Summasi — AVTOMATIK (narx bo'lsa taxminiy ko'rsatiladi) */}
       <Td isNumeric borderColor="border">
         <EstimatedCell
           value={estimatedSum}
           unit="so'm"
-          tooltip="Avtomatik hisoblanadi (saqlangach ko'rinadi)"
+          tooltip="Avtomatik hisoblanadi"
         />
       </Td>
 
-      {/* 9. Yoqilg'i qoldig'i — AVTOMATIK */}
       <Td isNumeric borderColor="border">
-        <AutoCell
-          value={null}
-          tooltip="Avtomatik hisoblanadi (saqlangach ko'rinadi)"
+        <EstimatedCell
+          value={computedBalanceAfter}
+          unit={selectedUnit}
+          tooltip="Avtomatik: oldingi qoldiq + olingan - sarflangan"
         />
       </Td>
 
-      {/* 10. Holat */}
       <Td borderColor="border">
         <HStack spacing={2}>
           <Switch
@@ -715,7 +923,6 @@ function NewRowInline({
         </HStack>
       </Td>
 
-      {/* 11. Amallar */}
       <Td borderColor="border">
         <IconButton
           aria-label="Qo'shish"
@@ -732,7 +939,6 @@ function NewRowInline({
   );
 }
 
-// Jadval qatorini tahrirlash uchun inline
 function EditRowInline({
   editForm,
   onChange,
@@ -740,15 +946,21 @@ function EditRowInline({
   onCancel,
   isSaving,
   fuelTypesById,
+  selectedCarId,
 }) {
   const rowBg = useColorModeValue("accent.50", "whiteAlpha.150");
   const rowBorder = useColorModeValue("accent.100", "whiteAlpha.300");
 
+  const hasDistance = editForm.distance !== "" && Number(editForm.distance) > 0;
+  const computedOdometerEnd =
+    editForm.odometer_start !== "" && hasDistance
+      ? Number(editForm.odometer_start) + Number(editForm.distance)
+      : null;
+
   const isValid =
     editForm.odometer_start !== "" &&
-    editForm.odometer_end !== "" &&
-    editForm.received_amount !== "" &&
-    Number(editForm.odometer_end) > Number(editForm.odometer_start);
+    hasDistance &&
+    editForm.received_amount !== "";
 
   const fuelMeta = fuelTypesById[editForm.fuel_id];
   const selectedUnit = fuelMeta?.unit || "litr";
@@ -758,9 +970,22 @@ function EditRowInline({
       ? Number(editForm.received_amount) * Number(fuelMeta.price)
       : null;
 
+  const normRate = useFuelNormRate(selectedCarId, editForm.fuel_id);
+  const estimatedFuelConsumed =
+    normRate !== null && hasDistance
+      ? (Number(editForm.distance) * normRate) / 100
+      : null;
+
+  const lastBalance = useLastBalance(selectedCarId);
+  const computedBalanceAfter =
+    lastBalance !== null && editForm.received_amount !== "" && hasDistance
+      ? Number(lastBalance) +
+        Number(editForm.received_amount) -
+        (estimatedFuelConsumed || 0)
+      : null;
+
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
-      {/* 1. Sana — tahrirlanmaydi */}
       <Td borderColor="border" py={2}>
         <InputGroup size="sm">
           <InputLeftElement pointerEvents="none">
@@ -773,7 +998,6 @@ function EditRowInline({
         </InputGroup>
       </Td>
 
-      {/* 2. Yoqilg'i turi — tahrirlanmaydi (badge sifatida) */}
       <Td borderColor="border">
         <Badge
           colorScheme={fuelMeta?.colorScheme || "neutral"}
@@ -786,7 +1010,6 @@ function EditRowInline({
         </Badge>
       </Td>
 
-      {/* 3. Olingan yoqilg'i — QO'LDA */}
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={editForm.received_amount}
@@ -796,45 +1019,39 @@ function EditRowInline({
         />
       </Td>
 
-      {/* 4. Sarflangan yoqilg'i — AVTOMATIK */}
       <Td isNumeric borderColor="border">
-        <AutoCell value={null} tooltip="Saqlagach qayta hisoblanadi" />
+        <EstimatedCell
+          value={estimatedFuelConsumed}
+          unit={selectedUnit}
+          tooltip="Sarf normasi orqali taxminiy hisoblanadi"
+        />
       </Td>
 
-      {/* 5. Spidometr boshi — QO'LDA */}
       <Td isNumeric borderColor="border">
-        <UnitNumberInput
+        <AutoCell
           value={editForm.odometer_start}
-          onChange={(val) => onChange({ odometer_start: val })}
           unit="km"
-          size="sm"
+          tooltip="Avtomatik — bu yozuvning boshlang'ich spidometri"
         />
       </Td>
 
-      {/* 6. Spidometr oxiri — QO'LDA */}
+      <Td isNumeric borderColor="border">
+        <AutoCell
+          value={computedOdometerEnd}
+          unit="km"
+          tooltip="Avtomatik: spidometr boshi + yurgan km"
+        />
+      </Td>
+
       <Td isNumeric borderColor="border">
         <UnitNumberInput
-          value={editForm.odometer_end}
-          onChange={(val) => onChange({ odometer_end: val })}
+          value={editForm.distance}
+          onChange={(val) => onChange({ distance: val })}
           unit="km"
           size="sm"
         />
       </Td>
 
-      {/* 7. Necha km yurgan */}
-      <Td isNumeric borderColor="border">
-        <Text color="textSecondary" fontSize="sm">
-          {editForm.odometer_start !== "" &&
-          editForm.odometer_end !== "" &&
-          Number(editForm.odometer_end) > Number(editForm.odometer_start)
-            ? `${formatNumber(
-                Number(editForm.odometer_end) - Number(editForm.odometer_start),
-              )} km`
-            : "—"}
-        </Text>
-      </Td>
-
-      {/* 8. Summasi — AVTOMATIK (narx bo'lsa taxminiy ko'rsatiladi) */}
       <Td isNumeric borderColor="border">
         <EstimatedCell
           value={estimatedSum}
@@ -843,12 +1060,14 @@ function EditRowInline({
         />
       </Td>
 
-      {/* 9. Yoqilg'i qoldig'i — AVTOMATIK */}
       <Td isNumeric borderColor="border">
-        <AutoCell value={null} tooltip="Saqlagach qayta hisoblanadi" />
+        <EstimatedCell
+          value={computedBalanceAfter}
+          unit={selectedUnit}
+          tooltip="Avtomatik hisoblanadi"
+        />
       </Td>
 
-      {/* 10. Holat */}
       <Td borderColor="border">
         <HStack spacing={2}>
           <Switch
@@ -863,7 +1082,6 @@ function EditRowInline({
         </HStack>
       </Td>
 
-      {/* 11. Amallar */}
       <Td borderColor="border">
         <HStack spacing={1}>
           <IconButton
@@ -899,12 +1117,8 @@ function DataRow({
   onStartEdit,
   onDelete,
 }) {
-  // Avtomatik hisoblanadigan (backend'dan keladigan) ma'lumotlar
   const { distance, fuelConsumed, sum, balanceAfter } = extractComputed(row);
 
-  // Yoqilg'i narxi — yoki jadval qatoriga backend nested "fuel" obyekti
-  // sifatida qo'shib yuborgan bo'lsa o'shandan, yoki fuelTypesById
-  // ro'yxatidan olamiz.
   const fuelMeta = fuelTypesById[row.fuel_id] || row.fuel || null;
   const fuelUnit = row.fuel_unit || fuelMeta?.unit || "litr";
   const fuelPrice =
@@ -912,8 +1126,6 @@ function DataRow({
       ? Number(fuelMeta.price)
       : null;
 
-  // Backend Summani (jami narxni) qaytarmasa, "Olingan yoqilg'i x narx"
-  // asosida o'zimiz hisoblab, foydalanuvchiga ko'rsatamiz.
   const displaySum =
     sum !== null
       ? sum
@@ -930,22 +1142,18 @@ function DataRow({
       _hover={{ bg: "primaryBg" }}
       transition="background 0.15s ease"
     >
-      {/* 1. Sana */}
       <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
         {formatDate(row.date)}
       </Td>
 
-      {/* 2. Yoqilg'i turi */}
       <Td borderColor="border">
         <FuelBadge fuelId={row.fuel_id} fuelTypesById={fuelTypesById} />
       </Td>
 
-      {/* 3. Olingan yoqilg'i */}
       <Td isNumeric color="text" borderColor="border">
         {formatNumber(row.received_amount)} {fuelUnit}
       </Td>
 
-      {/* 4. Sarflangan yoqilg'i — avtomatik */}
       <Td isNumeric color="textSecondary" borderColor="border">
         <AutoCell
           value={fuelConsumed}
@@ -954,18 +1162,14 @@ function DataRow({
         />
       </Td>
 
-      {/* 5. Spidometr boshi */}
       <Td isNumeric color="textSecondary" borderColor="border">
         {formatNumber(row.odometer_start)} km
       </Td>
 
-      {/* 6. Spidometr oxiri */}
       <Td isNumeric color="textSecondary" borderColor="border">
         {formatNumber(row.odometer_end)} km
       </Td>
 
-      {/* 7. Necha km yurgan — avtomatik (backend qiymati bo'lmasa, ikkita
-          spidometrdan frontendda hisoblab, zaxira sifatida ko'rsatamiz) */}
       <Td isNumeric fontWeight="bold" color="text" borderColor="border">
         {distance !== null
           ? `${formatNumber(distance)} km`
@@ -976,7 +1180,6 @@ function DataRow({
             : "—"}
       </Td>
 
-      {/* 8. Summasi — avtomatik */}
       <Td isNumeric fontWeight="bold" color="text" borderColor="border">
         <AutoCell
           value={displaySum}
@@ -989,7 +1192,6 @@ function DataRow({
         />
       </Td>
 
-      {/* 9. Yoqilg'i qoldig'i — avtomatik */}
       <Td isNumeric color="textSecondary" borderColor="border">
         <AutoCell
           value={balanceAfter}
@@ -998,7 +1200,6 @@ function DataRow({
         />
       </Td>
 
-      {/* 10. Holat */}
       <Td borderColor="border">
         {row.is_holiday ? (
           <Badge colorScheme="accent" variant="subtle" borderRadius="md">
@@ -1011,7 +1212,6 @@ function DataRow({
         )}
       </Td>
 
-      {/* 11. Amallar */}
       <Td borderColor="border">
         <HStack spacing={1}>
           <IconButton
@@ -1020,6 +1220,8 @@ function DataRow({
             size="sm"
             variant="ghost"
             borderRadius="md"
+            color="blue.500"
+            _hover={{ bg: "blue.50", color: "blue.600" }}
             onClick={() => onStartEdit(row)}
             isDisabled={editingId !== null}
           />
@@ -1028,8 +1230,9 @@ function DataRow({
             icon={<Trash2 size={14} />}
             size="sm"
             variant="ghost"
-            colorScheme="red"
             borderRadius="md"
+            color="red.500"
+            _hover={{ bg: "red.50", color: "red.600" }}
             onClick={() => onDelete(row)}
             isDisabled={editingId !== null}
           />
@@ -1058,6 +1261,7 @@ function ExpenseTable({
   onCancelEdit,
   isSavingEdit,
   onDelete,
+  selectedCarId,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1088,10 +1292,16 @@ function ExpenseTable({
           </Tooltip>
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
-          Spidometr (boshi)
-        </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
-          Spidometr (oxiri)
+          <Tooltip label="Avtomatik hisoblanadi" hasArrow>
+            <Text
+              as="span"
+              borderBottom="1px dashed"
+              borderColor="textSecondary"
+              cursor="default"
+            >
+              Spidometr (boshi)
+            </Text>
+          </Tooltip>
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
           <Tooltip label="Avtomatik hisoblanadi" hasArrow>
@@ -1101,9 +1311,12 @@ function ExpenseTable({
               borderColor="textSecondary"
               cursor="default"
             >
-              Yurgan (km)
+              Spidometr (oxiri)
             </Text>
           </Tooltip>
+        </Th>
+        <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
+          Yurgan (km)
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric minW="120px">
           <Tooltip label="Avtomatik hisoblanadi" hasArrow>
@@ -1150,6 +1363,7 @@ function ExpenseTable({
           onCancel={onCancelEdit}
           isSaving={isSavingEdit}
           fuelTypesById={fuelTypesById}
+          selectedCarId={selectedCarId}
         />
       );
     }
@@ -1190,7 +1404,6 @@ function ExpenseTable({
 
           {!loading && items.map((row, i) => renderRow(row, i))}
 
-          {/* "Yangi qo'shish" qatori jadval oxirida */}
           <NewRowInline
             newRow={newRow}
             onChange={onNewRowChange}
@@ -1200,6 +1413,7 @@ function ExpenseTable({
             fuelTypesLoading={fuelTypesLoading}
             fuelTypesById={fuelTypesById}
             disabled={noCarSelected}
+            selectedCarId={selectedCarId}
           />
         </Tbody>
       </Table>
@@ -1255,7 +1469,7 @@ const DEFAULT_FILTERS = {
   date_from: "",
   date_to: "",
   sortBy: "date",
-  sortOrder: "DESC",
+  sortOrder: "ASC",
 };
 
 function CostPage() {
@@ -1345,7 +1559,10 @@ function CostPage() {
     loadFuelTypes();
   }, [loadFuelTypes]);
 
-  const [newRow, setNewRow] = useState(EMPTY_NEW_ROW);
+  const [newRow, setNewRow] = useState({
+    ...EMPTY_NEW_ROW,
+    date: getTodayDate(),
+  });
   const [isSavingRow, setIsSavingRow] = useState(false);
 
   useEffect(() => {
@@ -1355,9 +1572,10 @@ function CostPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fuelTypes]);
 
-  const updateNewRow = (patch) => setNewRow((prev) => ({ ...prev, ...patch }));
+  const updateNewRow = (patch) => {
+    setNewRow((prev) => ({ ...prev, ...patch }));
+  };
 
-  // Inline tahrirlash
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -1382,10 +1600,11 @@ function CostPage() {
     setExpenses([]);
     setTotal(0);
     setEditingId(null);
-    // Mashina almashganda oldingi mashinaning spidometr qiymati
-    // yangi mashinaga tegishli bo'lmagani uchun tozalaymiz —
-    // loadExpenses tugagach quyidagi effekt to'g'ri qiymatni qo'yadi.
-    setNewRow((prev) => ({ ...prev, odometer_start: "" }));
+    setNewRow({
+      ...EMPTY_NEW_ROW,
+      date: getTodayDate(),
+      fuel_id: newRow.fuel_id || (fuelTypes.length > 0 ? fuelTypes[0].id : ""),
+    });
   };
 
   const loadExpenses = useCallback(async () => {
@@ -1424,15 +1643,9 @@ function CostPage() {
   }, [loadExpenses]);
 
   // Yangi qator uchun "Spidometr (boshi)"ni avtomatik to'ldirish:
-  // 1) Avval tanlangan mashinaning eng oxirgi (sana bo'yicha) xarajat
-  //    yozuvidagi odometer_end qiymatini olamiz.
-  // 2) Agar hali birorta xarajat yozuvi bo'lmasa (masalan yangi mashina),
-  //    mashinaning o'zidagi joriy probeg (odometer) qiymatidan olamiz.
-  // Foydalanuvchi qo'lda o'zgartirgan bo'lsa (newRow.odometer_start
-  // allaqachon to'ldirilgan bo'lsa), ustidan yozmaymiz.
   useEffect(() => {
     if (!selectedCarId) return;
-    if (loading) return; // xarajatlar hali yuklanmoqda — tugaguncha kutamiz
+    if (loading) return;
     if (newRow.odometer_start !== "") return;
 
     if (expenses && expenses.length > 0) {
@@ -1475,28 +1688,31 @@ function CostPage() {
       !newRow.date ||
       !newRow.fuel_id ||
       newRow.odometer_start === "" ||
-      newRow.odometer_end === "" ||
+      newRow.distance === "" ||
       newRow.received_amount === ""
     ) {
       toast({
         title: "Barcha maydonlarni to'ldiring",
         description:
-          "Sana, yoqilg'i turi, spidometr boshlanishi/oxiri va olingan miqdor kerak",
+          "Sana, yoqilg'i turi, necha km yurgan va olingan miqdor kerak",
         status: "warning",
         duration: 3500,
       });
       return;
     }
 
-    if (Number(newRow.odometer_end) <= Number(newRow.odometer_start)) {
+    if (Number(newRow.distance) <= 0) {
       toast({
         title: "Xatolik",
-        description: "Spidometr oxiri boshlanishidan katta bo'lishi kerak",
+        description: "Yurgan km 0 dan katta bo'lishi kerak",
         status: "error",
         duration: 3500,
       });
       return;
     }
+
+    const odometerStart = Number(newRow.odometer_start);
+    const odometerEnd = odometerStart + Number(newRow.distance);
 
     setIsSavingRow(true);
     try {
@@ -1504,20 +1720,16 @@ function CostPage() {
         car_id: selectedCarId,
         fuel_id: newRow.fuel_id,
         date: newRow.date,
-        odometer_start: Number(newRow.odometer_start),
-        odometer_end: Number(newRow.odometer_end),
+        odometer_start: odometerStart,
+        odometer_end: odometerEnd,
         received_amount: Number(newRow.received_amount),
         is_holiday: newRow.is_holiday,
         note: "",
       });
 
-      // Backend yaratilgan yozuvni hisoblangan maydonlar (masofa, sarf,
-      // summa, qoldiq) bilan birga qaytarsa, uni ro'yxatga darhol
-      // qo'shib qo'yamiz — GET so'rovi hali shu maydonlarni to'liq
-      // qaytarmasa ham, foydalanuvchi natijani zudlik bilan ko'radi.
       const created = extractSingle(response);
       if (created && created.id !== undefined) {
-        setExpenses((prev) => [created, ...prev]);
+        setExpenses((prev) => [...prev, created]);
         setTotal((prev) => prev + 1);
       }
 
@@ -1526,11 +1738,14 @@ function CostPage() {
         status: "success",
         duration: 2500,
       });
+
       setNewRow({
         ...EMPTY_NEW_ROW,
+        date: getTodayDate(),
         fuel_id: newRow.fuel_id,
-        odometer_start: newRow.odometer_end, // Keyingi kun uchun boshlanish spidometri
+        odometer_start: String(odometerEnd),
       });
+
       loadExpenses();
     } catch (err) {
       toast({
@@ -1545,12 +1760,14 @@ function CostPage() {
   };
 
   const startEdit = (row) => {
+    const start = Number(row.odometer_start) || 0;
+    const end = Number(row.odometer_end) || 0;
     setEditingId(row.id);
     setEditForm({
       date: row.date?.slice(0, 10) || "",
       fuel_id: row.fuel_id,
-      odometer_start: row.odometer_start || "",
-      odometer_end: row.odometer_end || "",
+      odometer_start: row.odometer_start ?? "",
+      distance: end > start ? String(end - start) : "",
       received_amount: row.received_amount || "",
       is_holiday: !!row.is_holiday,
     });
@@ -1568,38 +1785,39 @@ function CostPage() {
     if (!editingId) return;
     if (
       editForm.odometer_start === "" ||
-      editForm.odometer_end === "" ||
+      editForm.distance === "" ||
       editForm.received_amount === ""
     ) {
       toast({
-        title: "Spidometr va olingan miqdor kerak",
+        title: "Yurgan km va olingan miqdor kerak",
         status: "warning",
         duration: 3000,
       });
       return;
     }
 
-    if (Number(editForm.odometer_end) <= Number(editForm.odometer_start)) {
+    if (Number(editForm.distance) <= 0) {
       toast({
         title: "Xatolik",
-        description: "Spidometr oxiri boshlanishidan katta bo'lishi kerak",
+        description: "Yurgan km 0 dan katta bo'lishi kerak",
         status: "error",
         duration: 3500,
       });
       return;
     }
 
+    const odometerStart = Number(editForm.odometer_start);
+    const odometerEnd = odometerStart + Number(editForm.distance);
+
     setIsSavingEdit(true);
     try {
       const response = await apiCost.Update(editingId, {
-        odometer_start: Number(editForm.odometer_start),
-        odometer_end: Number(editForm.odometer_end),
+        odometer_start: odometerStart,
+        odometer_end: odometerEnd,
         received_amount: Number(editForm.received_amount),
         is_holiday: editForm.is_holiday,
       });
 
-      // Backend qayta hisoblangan qatorni qaytarsa, uni darhol joyiga
-      // almashtiramiz — GET keyinroq to'liq ro'yxatni yangilaydi.
       const updated = extractSingle(response);
       if (updated && updated.id !== undefined) {
         setExpenses((prev) =>
@@ -1714,6 +1932,7 @@ function CostPage() {
             onCancelEdit={cancelEdit}
             isSavingEdit={isSavingEdit}
             onDelete={askDelete}
+            selectedCarId={selectedCarId}
           />
 
           {!noCarSelected && !loading && expenses.length > 0 && (
