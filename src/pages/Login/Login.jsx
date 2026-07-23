@@ -85,7 +85,7 @@ export default function Login() {
         return;
       }
 
-      toastService.success("Welcome Boss!");
+      toastService.success("Xush kelibsiz!");
 
       if (data.user.role === "super_admin") {
         navigate("/admin/dashboard", { replace: true });
