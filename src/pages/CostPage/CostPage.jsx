@@ -12,13 +12,13 @@ import {
   Table,
   Thead,
   Tbody,
+  Tfoot,
   Tr,
   Th,
   Td,
   TableContainer,
   Badge,
   Skeleton,
-  useToast,
   useDisclosure,
   useColorModeValue,
   AlertDialog,
@@ -32,7 +32,7 @@ import {
   NumberInputField,
   Heading,
   Tooltip,
-  Avatar,
+  Divider,
 } from "@chakra-ui/react";
 import {
   Plus,
@@ -43,12 +43,14 @@ import {
   Trash2,
   AlertTriangle,
   Car,
+  Gauge,
   LayoutGrid,
   List,
 } from "lucide-react";
 import { apiCost } from "../../Services/api/apiCost";
 import { apiFuel } from "../../Services/api/Fuels";
 import { apiCars } from "../../Services/api/Cars";
+import { toastService } from "../../utils/toast";
 
 // ---------- constants & helpers ----------
 const FETCH_LIMIT = 100;
@@ -225,6 +227,28 @@ function extractSingle(payload) {
   return payload;
 }
 
+function extractTotals(payload) {
+  const raw = pick(payload, ["totals"], null);
+  return Array.isArray(raw) ? raw : [];
+}
+
+function normalizeTotal(raw, index) {
+  const fuelId = pick(raw, ["fuel_id"], index);
+  const fuelName = pick(raw, ["fuel_name", "name"], "Noma'lum");
+  const fuelUnit = pick(raw, ["fuel_unit", "unit"], "");
+  return {
+    fuelId,
+    fuelName: String(fuelName),
+    fuelUnit: String(fuelUnit || ""),
+    totalReceived: Number(pick(raw, ["total_received_amount"], 0)) || 0,
+    totalExpense:
+      Number(pick(raw, ["total_fuel_expence", "total_fuel_expense"], 0)) || 0,
+    totalMileage: Number(pick(raw, ["total_mileage"], 0)) || 0,
+    totalSum: Number(pick(raw, ["total_price_sum"], 0)) || 0,
+    colorScheme: getFuelColorScheme(fuelName, index),
+  };
+}
+
 function normalizeFuelType(raw, index) {
   const id = pick(raw, ["id", "_id", "uuid"], null);
   const label = pick(raw, ["name", "label", "title"], id ?? "Noma'lum");
@@ -334,7 +358,7 @@ function formatDate(value) {
   return d.toLocaleDateString("uz-UZ");
 }
 
-// ---------- shared input styles (dark/light ready) ----------
+// ---------- shared input styles ----------
 const inputStyles = {
   bg: "surface",
   color: "text",
@@ -351,7 +375,7 @@ const inputStyles = {
   },
 };
 
-// ---------- sub-components ----------
+// ---------- sub-components (o'zgarmagan) ----------
 function UnitNumberInput({
   value,
   onChange,
@@ -517,11 +541,17 @@ function NoCarState() {
   );
 }
 
-// ---------- FILTER BAR – select first, then dates ----------
-function FilterBar({ filters, onChange, fuelTypes, fuelTypesLoading }) {
+// ---------- FILTER BAR ----------
+function FilterBar({
+  filters,
+  onChange,
+  fuelTypes,
+  fuelTypesLoading,
+  leading,
+}) {
   return (
     <Flex direction="row" gap={3} wrap="wrap" align="center">
-      {/* Yoqilg'i turi selecti – birinchi o'rinda */}
+      {leading}
       {fuelTypesLoading ? (
         <Skeleton h="32px" w="160px" borderRadius="md" />
       ) : (
@@ -540,7 +570,6 @@ function FilterBar({ filters, onChange, fuelTypes, fuelTypesLoading }) {
           ))}
         </Select>
       )}
-
       <Input
         type="date"
         value={filters.date_from}
@@ -549,7 +578,6 @@ function FilterBar({ filters, onChange, fuelTypes, fuelTypesLoading }) {
         size="sm"
         {...inputStyles}
       />
-
       <Input
         type="date"
         value={filters.date_to}
@@ -562,124 +590,231 @@ function FilterBar({ filters, onChange, fuelTypes, fuelTypesLoading }) {
   );
 }
 
-// ---------- Status Cards (show only when toggled) ----------
-function StatusCards({
-  cars,
-  selectedCarId,
-  onCarChange,
-  carsLoading,
-  showCards,
-}) {
-  if (!showCards) return null; // yashirin, faqat toggle bosilganda ko'rinadi
+// ---------- CarPickerSelect ----------
+function CarPickerSelect({ cars, selectedCarId, onCarChange, carsLoading }) {
+  if (carsLoading) {
+    return <Skeleton h="38px" w="260px" borderRadius="lg" flexShrink={0} />;
+  }
+  return (
+    <HStack
+      spacing={0}
+      flex="0 0 auto"
+      w="260px"
+      borderWidth="1px"
+      borderColor={selectedCarId ? "primary.400" : "border"}
+      borderRadius="lg"
+      overflow="hidden"
+      bg="surface"
+      transition="all 0.2s ease"
+      _hover={{ borderColor: "primary.400" }}
+      _focusWithin={{
+        borderColor: "primary.500",
+        boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.15)",
+      }}
+    >
+      <Center boxSize="38px" bg="primary.500" color="white" flexShrink={0}>
+        <Car size={18} />
+      </Center>
+      <Select
+        value={selectedCarId}
+        onChange={(e) => onCarChange(e.target.value)}
+        size="sm"
+        h="38px"
+        border="none"
+        borderRadius="0"
+        placeholder="Mashinani tanlang"
+        bg="transparent"
+        color="text"
+        fontWeight="600"
+        _focus={{ boxShadow: "none" }}
+        _hover={{}}
+      >
+        {cars.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.label}
+            {c.odometer !== null ? ` — ${formatNumber(c.odometer)} km` : ""}
+          </option>
+        ))}
+      </Select>
+    </HStack>
+  );
+}
 
+// ---------- CarCard & CarCardsGrid ----------
+function CarCard({ car, isSelected, onClick }) {
+  const selectedBg = useColorModeValue(
+    "rgba(59,130,246,0.06)",
+    "rgba(59,130,246,0.12)",
+  );
+  const ringShadow = useColorModeValue(
+    "0 0 0 3px rgba(59,130,246,0.14)",
+    "0 0 0 3px rgba(59,130,246,0.28)",
+  );
+  return (
+    <Box
+      as="button"
+      type="button"
+      onClick={onClick}
+      textAlign="left"
+      position="relative"
+      bg={isSelected ? selectedBg : "surface"}
+      borderWidth="1.5px"
+      borderColor={isSelected ? "primary.500" : "border"}
+      borderRadius="xl"
+      px={5}
+      py={5}
+      w="255px"
+      flex="0 0 255px"
+      transition="all 0.18s ease"
+      boxShadow={isSelected ? ringShadow : "sm"}
+      _hover={{
+        borderColor: "primary.400",
+        transform: "translateY(-2px)",
+        boxShadow: "md",
+      }}
+      _active={{ transform: "translateY(0)" }}
+    >
+      {isSelected && (
+        <Center
+          position="absolute"
+          top="-8px"
+          right="-8px"
+          boxSize="22px"
+          bg="primary.500"
+          color="white"
+          borderRadius="full"
+          boxShadow="0 2px 6px rgba(0,0,0,0.25)"
+        >
+          <Check size={13} strokeWidth={3} />
+        </Center>
+      )}
+      <HStack spacing={3.5} align="center">
+        <Center
+          boxSize="46px"
+          borderRadius="lg"
+          bg={isSelected ? "primary.500" : "bg"}
+          color={isSelected ? "white" : "textSecondary"}
+          flexShrink={0}
+          borderWidth={isSelected ? "0" : "1px"}
+          borderColor="border"
+          transition="all 0.18s ease"
+        >
+          <Car size={21} />
+        </Center>
+        <Text
+          fontWeight="bold"
+          fontSize="md"
+          color="text"
+          noOfLines={1}
+          title={car.label}
+        >
+          {car.label}
+        </Text>
+      </HStack>
+      <Divider my={3.5} borderColor="border" />
+      <HStack justify="space-between" align="center">
+        <Badge
+          variant="subtle"
+          colorScheme={isSelected ? "primary" : "gray"}
+          borderRadius="md"
+          px={2.5}
+          py={1}
+          fontSize="12px"
+          display="inline-flex"
+          alignItems="center"
+          gap={1.5}
+        >
+          <Gauge size={13} />
+          {car.odometer !== null ? `${formatNumber(car.odometer)} km` : "—"}
+        </Badge>
+      </HStack>
+    </Box>
+  );
+}
+
+function CarCardsGrid({ cars, selectedCarId, onCarChange, carsLoading }) {
   if (carsLoading) {
     return (
-      <Flex gap={4} wrap="wrap" mb={6}>
+      <Flex gap={3} wrap="wrap">
         {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} h="80px" w="200px" borderRadius="xl" />
+          <Skeleton key={i} h="118px" w="255px" borderRadius="xl" />
         ))}
       </Flex>
     );
   }
-
+  if (cars.length === 0) {
+    return (
+      <Text color="textSecondary" fontSize="sm">
+        Mashinalar topilmadi
+      </Text>
+    );
+  }
   return (
-    <Flex gap={4} wrap="wrap" mb={6} align="center">
+    <Flex gap={5} wrap="wrap">
       {cars.map((car) => (
-        <Box
+        <CarCard
           key={car.id}
-          bg={selectedCarId === car.id ? "primary.50" : "surface"}
-          borderWidth="1px"
-          borderColor={selectedCarId === car.id ? "primary.500" : "border"}
-          borderRadius="xl"
-          px={4}
-          py={3}
-          cursor="pointer"
+          car={car}
+          isSelected={selectedCarId === car.id}
           onClick={() => onCarChange(car.id)}
-          transition="all 0.2s ease"
-          _hover={{
-            borderColor: "primary.400",
-            shadow: "md",
-            transform: "translateY(-2px)",
-          }}
-          shadow={selectedCarId === car.id ? "md" : "sm"}
-          minW="180px"
-          flex="1 0 auto"
-        >
-          <HStack spacing={3}>
-            <Avatar
-              size="sm"
-              bg={selectedCarId === car.id ? "primary.100" : "gray.100"}
-              icon={
-                <Car
-                  size={18}
-                  color={selectedCarId === car.id ? "primary.500" : "gray.400"}
-                />
-              }
-            />
-            <Box>
-              <Text
-                fontWeight="medium"
-                fontSize="sm"
-                color="text"
-                noOfLines={1}
-              >
-                {car.label}
-              </Text>
-              <Text fontSize="xs" color="textSecondary">
-                {car.odometer !== null
-                  ? `${formatNumber(car.odometer)} km`
-                  : "—"}
-              </Text>
-            </Box>
-            {selectedCarId === car.id && (
-              <Box ml="auto">
-                <Check size={14} color="var(--chakra-colors-primary-500)" />
-              </Box>
-            )}
-          </HStack>
-        </Box>
+        />
       ))}
-
-      <Box minW="200px" flex="0 0 auto">
-        <Select
-          value={selectedCarId}
-          onChange={(e) => onCarChange(e.target.value)}
-          size="sm"
-          {...inputStyles}
-          placeholder="Mashinani tanlang"
-        >
-          {cars.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}{" "}
-              {c.odometer !== null ? `(${formatNumber(c.odometer)} km)` : ""}
-            </option>
-          ))}
-        </Select>
-      </Box>
     </Flex>
   );
 }
 
-// ---------- Filter panel container (always visible) ----------
-function CarSelector({ filters, onFilterChange, fuelTypes, fuelTypesLoading }) {
+// ---------- CarSelector ----------
+function CarSelector({
+  filters,
+  onFilterChange,
+  fuelTypes,
+  fuelTypesLoading,
+  cars,
+  carsLoading,
+  selectedCarId,
+  onCarChange,
+  showCards,
+}) {
   return (
-    <Box
-      bg="surface"
-      borderRadius="2xl"
-      borderWidth="1px"
-      borderColor="border"
-      boxShadow="md"
-      px={{ base: 5, md: 8 }}
-      py={5}
-      mb={6}
-      w="100%"
-    >
-      <FilterBar
-        filters={filters}
-        onChange={onFilterChange}
-        fuelTypes={fuelTypes}
-        fuelTypesLoading={fuelTypesLoading}
-      />
+    <Box mb={6} w="100%">
+      <Box
+        bg="surface"
+        borderRadius="2xl"
+        borderWidth="1px"
+        borderColor="border"
+        boxShadow="md"
+        px={{ base: 5, md: 8 }}
+        py={4}
+        mb={showCards ? 4 : 0}
+        w="100%"
+      >
+        <FilterBar
+          filters={filters}
+          onChange={onFilterChange}
+          fuelTypes={fuelTypes}
+          fuelTypesLoading={fuelTypesLoading}
+          leading={
+            !showCards ? (
+              <CarPickerSelect
+                cars={cars}
+                selectedCarId={selectedCarId}
+                onCarChange={onCarChange}
+                carsLoading={carsLoading}
+              />
+            ) : null
+          }
+        />
+      </Box>
+      {showCards && (
+        <Box mt={4}>
+          <CarCardsGrid
+            cars={cars}
+            selectedCarId={selectedCarId}
+            onCarChange={onCarChange}
+            carsLoading={carsLoading}
+          />
+        </Box>
+      )}
     </Box>
   );
 }
@@ -687,14 +822,12 @@ function CarSelector({ filters, onFilterChange, fuelTypes, fuelTypesLoading }) {
 // ---------- custom hooks ----------
 function useFuelNormRate(carId, fuelId) {
   const [rate, setRate] = useState(null);
-
   useEffect(() => {
     if (!carId || !fuelId) {
       setRate(null);
       return;
     }
     let cancelled = false;
-
     apiCars
       .AllNorms(1, 1, carId, fuelId)
       .then((response) => {
@@ -724,25 +857,21 @@ function useFuelNormRate(carId, fuelId) {
       .catch(() => {
         if (!cancelled) setRate(null);
       });
-
     return () => {
       cancelled = true;
     };
   }, [carId, fuelId]);
-
   return rate;
 }
 
 function useLastBalance(carId) {
   const [lastBalance, setLastBalance] = useState(null);
-
   useEffect(() => {
     if (!carId) {
       setLastBalance(null);
       return;
     }
     let cancelled = false;
-
     apiCost
       .All(1, 1, {
         car_id: carId,
@@ -762,12 +891,10 @@ function useLastBalance(carId) {
       .catch(() => {
         if (!cancelled) setLastBalance(null);
       });
-
     return () => {
       cancelled = true;
     };
   }, [carId]);
-
   return lastBalance;
 }
 
@@ -785,27 +912,22 @@ function NewRowInline({
 }) {
   const rowBg = useColorModeValue("primary.50", "whiteAlpha.100");
   const rowBorder = useColorModeValue("primary.100", "whiteAlpha.200");
-
   const fuelMeta = fuelTypesById?.[newRow.fuel_id];
   const selectedUnit = fuelMeta?.unit || "litr";
-
   const estimatedSum =
     fuelMeta?.price && newRow.received_amount !== ""
       ? Number(newRow.received_amount) * Number(fuelMeta.price)
       : null;
-
   const hasDistance = newRow.distance !== "" && Number(newRow.distance) > 0;
   const computedOdometerEnd =
     newRow.odometer_start !== "" && hasDistance
       ? Number(newRow.odometer_start) + Number(newRow.distance)
       : null;
-
   const normRate = useFuelNormRate(selectedCarId, newRow.fuel_id);
   const estimatedFuelConsumed =
     normRate !== null && hasDistance
       ? (Number(newRow.distance) * normRate) / 100
       : null;
-
   const lastBalance = useLastBalance(selectedCarId);
   const computedBalanceAfter =
     lastBalance !== null && newRow.received_amount !== "" && hasDistance
@@ -813,7 +935,6 @@ function NewRowInline({
         Number(newRow.received_amount) -
         (estimatedFuelConsumed || 0)
       : null;
-
   const isValid =
     !disabled &&
     newRow.date &&
@@ -834,7 +955,6 @@ function NewRowInline({
           {...inputStyles}
         />
       </Td>
-
       <Td borderColor="border">
         {fuelTypesLoading ? (
           <Skeleton h="32px" borderRadius="md" />
@@ -855,7 +975,6 @@ function NewRowInline({
           </Select>
         )}
       </Td>
-
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={newRow.received_amount}
@@ -865,7 +984,6 @@ function NewRowInline({
           size="sm"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <EstimatedCell
           value={estimatedFuelConsumed}
@@ -873,7 +991,6 @@ function NewRowInline({
           tooltip="Sarf normasi orqali taxminiy hisoblanadi"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <AutoCell
           value={newRow.odometer_start}
@@ -881,7 +998,6 @@ function NewRowInline({
           tooltip="Avtomatik: oldingi yozuvning oxirgi spidometridan olinadi"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <AutoCell
           value={computedOdometerEnd}
@@ -889,7 +1005,6 @@ function NewRowInline({
           tooltip="Avtomatik: spidometr boshi + yurgan km"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={newRow.distance}
@@ -899,11 +1014,9 @@ function NewRowInline({
           size="sm"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <EstimatedCell value={estimatedSum} unit="so'm" />
       </Td>
-
       <Td isNumeric borderColor="border">
         <EstimatedCell
           value={computedBalanceAfter}
@@ -911,7 +1024,6 @@ function NewRowInline({
           tooltip="Avtomatik: oldingi qoldiq + olingan - sarflangan"
         />
       </Td>
-
       <Td borderColor="border">
         <HStack spacing={2}>
           <Switch
@@ -926,7 +1038,6 @@ function NewRowInline({
           </Text>
         </HStack>
       </Td>
-
       <Td borderColor="border">
         <IconButton
           aria-label="Qo'shish"
@@ -954,32 +1065,26 @@ function EditRowInline({
 }) {
   const rowBg = useColorModeValue("accent.50", "whiteAlpha.150");
   const rowBorder = useColorModeValue("accent.100", "whiteAlpha.300");
-
   const hasDistance = editForm.distance !== "" && Number(editForm.distance) > 0;
   const computedOdometerEnd =
     editForm.odometer_start !== "" && hasDistance
       ? Number(editForm.odometer_start) + Number(editForm.distance)
       : null;
-
   const isValid =
     editForm.odometer_start !== "" &&
     hasDistance &&
     editForm.received_amount !== "";
-
   const fuelMeta = fuelTypesById[editForm.fuel_id];
   const selectedUnit = fuelMeta?.unit || "litr";
-
   const estimatedSum =
     fuelMeta?.price && editForm.received_amount !== ""
       ? Number(editForm.received_amount) * Number(fuelMeta.price)
       : null;
-
   const normRate = useFuelNormRate(selectedCarId, editForm.fuel_id);
   const estimatedFuelConsumed =
     normRate !== null && hasDistance
       ? (Number(editForm.distance) * normRate) / 100
       : null;
-
   const lastBalance = useLastBalance(selectedCarId);
   const computedBalanceAfter =
     lastBalance !== null && editForm.received_amount !== "" && hasDistance
@@ -999,7 +1104,6 @@ function EditRowInline({
           {...inputStyles}
         />
       </Td>
-
       <Td borderColor="border">
         <Badge
           colorScheme={fuelMeta?.colorScheme || "neutral"}
@@ -1011,7 +1115,6 @@ function EditRowInline({
           {fuelMeta?.label || editForm.fuel_id || "—"}
         </Badge>
       </Td>
-
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={editForm.received_amount}
@@ -1020,7 +1123,6 @@ function EditRowInline({
           size="sm"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <EstimatedCell
           value={estimatedFuelConsumed}
@@ -1028,7 +1130,6 @@ function EditRowInline({
           tooltip="Sarf normasi orqali taxminiy hisoblanadi"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <AutoCell
           value={editForm.odometer_start}
@@ -1036,7 +1137,6 @@ function EditRowInline({
           tooltip="Avtomatik — bu yozuvning boshlang'ich spidometri"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <AutoCell
           value={computedOdometerEnd}
@@ -1044,7 +1144,6 @@ function EditRowInline({
           tooltip="Avtomatik: spidometr boshi + yurgan km"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={editForm.distance}
@@ -1053,7 +1152,6 @@ function EditRowInline({
           size="sm"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <EstimatedCell
           value={estimatedSum}
@@ -1061,11 +1159,9 @@ function EditRowInline({
           tooltip="Saqlagach qayta hisoblanadi"
         />
       </Td>
-
       <Td isNumeric borderColor="border">
         <EstimatedCell value={computedBalanceAfter} unit={selectedUnit} />
       </Td>
-
       <Td borderColor="border">
         <HStack spacing={2}>
           <Switch
@@ -1079,7 +1175,6 @@ function EditRowInline({
           </Text>
         </HStack>
       </Td>
-
       <Td borderColor="border">
         <HStack spacing={1}>
           <IconButton
@@ -1117,14 +1212,12 @@ function DataRow({
   isLastRow,
 }) {
   const { distance, fuelConsumed, sum, balanceAfter } = extractComputed(row);
-
   const fuelMeta = fuelTypesById[row.fuel_id] || row.fuel || null;
   const fuelUnit = row.fuel_unit || fuelMeta?.unit || "litr";
   const fuelPrice =
     fuelMeta?.price !== undefined && fuelMeta?.price !== null
       ? Number(fuelMeta.price)
       : null;
-
   const displaySum =
     sum !== null
       ? sum
@@ -1134,7 +1227,6 @@ function DataRow({
         ? Number(row.received_amount) * fuelPrice
         : null;
   const sumIsComputedLocally = sum === null && displaySum !== null;
-
   const showActions = isLastRow && editingId === null;
 
   return (
@@ -1146,15 +1238,12 @@ function DataRow({
       <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
         {formatDate(row.date)}
       </Td>
-
       <Td borderColor="border">
         <FuelBadge fuelId={row.fuel_id} fuelTypesById={fuelTypesById} />
       </Td>
-
       <Td isNumeric color="text" borderColor="border">
         {formatNumber(row.received_amount)} {fuelUnit}
       </Td>
-
       <Td isNumeric color="textSecondary" borderColor="border">
         <AutoCell
           value={fuelConsumed}
@@ -1162,25 +1251,19 @@ function DataRow({
           tooltip="Backend hisoblagan"
         />
       </Td>
-
       <Td isNumeric color="textSecondary" borderColor="border">
         {formatNumber(row.odometer_start)} km
       </Td>
-
       <Td isNumeric color="textSecondary" borderColor="border">
         {formatNumber(row.odometer_end)} km
       </Td>
-
       <Td isNumeric fontWeight="bold" color="text" borderColor="border">
         {distance !== null
           ? `${formatNumber(distance)} km`
           : row.odometer_start !== undefined && row.odometer_end !== undefined
-            ? `${formatNumber(
-                Number(row.odometer_end) - Number(row.odometer_start),
-              )} km`
+            ? `${formatNumber(Number(row.odometer_end) - Number(row.odometer_start))} km`
             : "—"}
       </Td>
-
       <Td isNumeric fontWeight="bold" color="text" borderColor="border">
         <AutoCell
           value={displaySum}
@@ -1192,7 +1275,6 @@ function DataRow({
           }
         />
       </Td>
-
       <Td isNumeric color="textSecondary" borderColor="border">
         <AutoCell
           value={balanceAfter}
@@ -1200,11 +1282,9 @@ function DataRow({
           tooltip="Backend hisoblagan"
         />
       </Td>
-
       <Td borderColor="border">
         <HolidayBadge isHoliday={row.is_holiday} />
       </Td>
-
       <Td borderColor="border">
         {showActions ? (
           <HStack spacing={1}>
@@ -1241,6 +1321,64 @@ function DataRow({
   );
 }
 
+function TotalsFooterRow({ total }) {
+  return (
+    <Tr bg="primaryBg" borderTopWidth="2px" borderColor="border">
+      <Td borderColor="border" py={3}>
+        <Badge
+          colorScheme="primary"
+          variant="solid"
+          borderRadius="md"
+          px={2}
+          py={0.5}
+          fontSize="10px"
+        >
+          Jami
+        </Badge>
+      </Td>
+      <Td borderColor="border">
+        <Badge
+          colorScheme={total.colorScheme}
+          borderRadius="md"
+          px={2.5}
+          py={1}
+          fontWeight="bold"
+        >
+          {total.fuelName}
+        </Badge>
+      </Td>
+      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
+        {formatNumber(total.totalReceived)} {total.fuelUnit}
+      </Td>
+      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
+        {formatNumber(total.totalExpense)} {total.fuelUnit}
+      </Td>
+      <Td borderColor="border" />
+      <Td borderColor="border" />
+      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
+        {formatNumber(total.totalMileage)} km
+      </Td>
+      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
+        {formatNumber(total.totalSum)} so'm
+      </Td>
+      <Td borderColor="border" />
+      <Td borderColor="border" />
+      <Td borderColor="border" />
+    </Tr>
+  );
+}
+
+function TotalsFooter({ totals }) {
+  if (!totals || totals.length === 0) return null;
+  return (
+    <Tfoot position="sticky" bottom={0} zIndex={1}>
+      {totals.map((t) => (
+        <TotalsFooterRow key={t.fuelId} total={t} />
+      ))}
+    </Tfoot>
+  );
+}
+
 // ---------- main table ----------
 function ExpenseTable({
   items,
@@ -1262,6 +1400,7 @@ function ExpenseTable({
   isSavingEdit,
   onDelete,
   selectedCarId,
+  totals,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1309,7 +1448,6 @@ function ExpenseTable({
 
   const renderRow = (row, idx) => {
     const isLast = idx === items.length - 1;
-
     if (row.id === editingId) {
       return (
         <EditRowInline
@@ -1351,7 +1489,6 @@ function ExpenseTable({
                 </Td>
               </Tr>
             ))}
-
           {!loading && items.length === 0 && (
             <Tr>
               <Td colSpan={11} border="none" p={0}>
@@ -1359,9 +1496,7 @@ function ExpenseTable({
               </Td>
             </Tr>
           )}
-
           {!loading && items.map((row, i) => renderRow(row, i))}
-
           <NewRowInline
             newRow={newRow}
             onChange={onNewRowChange}
@@ -1374,6 +1509,7 @@ function ExpenseTable({
             selectedCarId={selectedCarId}
           />
         </Tbody>
+        {!loading && <TotalsFooter totals={totals} />}
       </Table>
     </TableContainer>
   );
@@ -1388,7 +1524,6 @@ function DeleteConfirmDialog({
   target,
 }) {
   const cancelRef = React.useRef();
-
   return (
     <AlertDialog
       isOpen={isOpen}
@@ -1470,15 +1605,13 @@ const DEFAULT_FILTERS = {
 };
 
 // ============================================================
-// ASOSIY KOMPONENT – CostPage
+// ASOSIY KOMPONENT – CostPage (toastService bilan)
 // ============================================================
 function CostPage() {
-  const toast = useToast();
-
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
   const [selectedCarId, setSelectedCarId] = useState("");
-  const [showCards, setShowCards] = useState(false); // default: yashirin
+  const [showCards, setShowCards] = useState(false);
 
   const loadCars = useCallback(async () => {
     setCarsLoading(true);
@@ -1500,27 +1633,23 @@ function CostPage() {
         setSelectedCarId(normalized[0].id);
       }
     } catch (err) {
-      toast({
-        title: "Mashinalar ro'yxatini yuklab bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toastService.error(
+        "Mashinalar ro'yxatini yuklab bo'lmadi: " + err.message,
+      );
       setCars([]);
     } finally {
       setCarsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadCars();
   }, [loadCars]);
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
-
   const [expenses, setExpenses] = useState([]);
+  const [totals, setTotals] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [fuelTypes, setFuelTypes] = useState([]);
   const [fuelTypesLoading, setFuelTypesLoading] = useState(true);
 
@@ -1539,17 +1668,12 @@ function CostPage() {
       const raw = extractList(response?.data);
       setFuelTypes(raw.map(normalizeFuelType));
     } catch (err) {
-      toast({
-        title: "Yoqilg'i turlarini yuklab bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toastService.error("Yoqilg'i turlarini yuklab bo'lmadi: " + err.message);
       setFuelTypes([]);
     } finally {
       setFuelTypesLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadFuelTypes();
@@ -1586,6 +1710,7 @@ function CostPage() {
   const handleCarChange = (id) => {
     setSelectedCarId(id);
     setExpenses([]);
+    setTotals([]);
     setEditingId(null);
     setNewRow({
       ...EMPTY_NEW_ROW,
@@ -1610,17 +1735,14 @@ function CostPage() {
         sortOrder: filters.sortOrder,
       });
       setExpenses(extractList(data));
+      setTotals(extractTotals(data).map(normalizeTotal));
     } catch (err) {
-      toast({
-        title: "Ro'yxatni yuklab bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toastService.error("Ro'yxatni yuklab bo'lmadi: " + err.message);
+      setTotals([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedCarId, filters, toast]);
+  }, [selectedCarId, filters]);
 
   useEffect(() => {
     loadExpenses();
@@ -1638,7 +1760,6 @@ function CostPage() {
         const db = new Date(b.date).getTime() || 0;
         return db > da ? b : a;
       });
-
       if (latest?.odometer_end !== undefined && latest?.odometer_end !== null) {
         setNewRow((prev) => ({
           ...prev,
@@ -1659,11 +1780,7 @@ function CostPage() {
 
   const handleAddRow = async () => {
     if (!selectedCarId) {
-      toast({
-        title: "Avval mashinani tanlang",
-        status: "warning",
-        duration: 3000,
-      });
+      toastService.error("Avval mashinani tanlang");
       return;
     }
 
@@ -1674,34 +1791,21 @@ function CostPage() {
       newRow.distance === "" ||
       newRow.received_amount === ""
     ) {
-      toast({
-        title: "Barcha maydonlarni to'ldiring",
-        description:
-          "Sana, yoqilg'i turi, necha km yurgan va olingan miqdor kerak",
-        status: "warning",
-        duration: 3500,
-      });
+      toastService.error(
+        "Barcha maydonlarni to'ldiring: Sana, yoqilg'i turi, necha km yurgan va olingan miqdor kerak",
+      );
       return;
     }
 
     if (isFutureDate(newRow.date)) {
-      toast({
-        title: "Xatolik",
-        description:
-          "Ertangi kun uchun ma'lumot qo'shib bo'lmaydi! Faqat bugungi yoki o'tgan kunlar uchun yozuv qo'shishingiz mumkin.",
-        status: "error",
-        duration: 4000,
-      });
+      toastService.error(
+        "Ertangi kun uchun ma'lumot qo'shib bo'lmaydi! Faqat bugungi yoki o'tgan kunlar uchun yozuv qo'shishingiz mumkin.",
+      );
       return;
     }
 
     if (Number(newRow.distance) <= 0) {
-      toast({
-        title: "Xatolik",
-        description: "Yurgan km 0 dan katta bo'lishi kerak",
-        status: "error",
-        duration: 3500,
-      });
+      toastService.error("Yurgan km 0 dan katta bo'lishi kerak");
       return;
     }
 
@@ -1709,6 +1813,8 @@ function CostPage() {
     const odometerEnd = odometerStart + Number(newRow.distance);
 
     setIsSavingRow(true);
+    const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
+
     try {
       const response = await apiCost.Create({
         car_id: selectedCarId,
@@ -1726,11 +1832,8 @@ function CostPage() {
         setExpenses((prev) => [...prev, created]);
       }
 
-      toast({
-        title: "Yangi xarajat qo'shildi",
-        status: "success",
-        duration: 2500,
-      });
+      toastService.dismiss(loadingToastId);
+      toastService.success("Yangi xarajat qo'shildi");
 
       setNewRow({
         ...EMPTY_NEW_ROW,
@@ -1741,12 +1844,8 @@ function CostPage() {
 
       loadExpenses();
     } catch (err) {
-      toast({
-        title: "Saqlab bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toastService.dismiss(loadingToastId);
+      toastService.error("Saqlab bo'lmadi: " + err.message);
     } finally {
       setIsSavingRow(false);
     }
@@ -1781,31 +1880,17 @@ function CostPage() {
       editForm.distance === "" ||
       editForm.received_amount === ""
     ) {
-      toast({
-        title: "Yurgan km va olingan miqdor kerak",
-        status: "warning",
-        duration: 3000,
-      });
+      toastService.error("Yurgan km va olingan miqdor kerak");
       return;
     }
 
     if (isFutureDate(editForm.date)) {
-      toast({
-        title: "Xatolik",
-        description: "Ertangi kun uchun ma'lumot tahrirlab bo'lmaydi!",
-        status: "error",
-        duration: 4000,
-      });
+      toastService.error("Ertangi kun uchun ma'lumot tahrirlab bo'lmaydi!");
       return;
     }
 
     if (Number(editForm.distance) <= 0) {
-      toast({
-        title: "Xatolik",
-        description: "Yurgan km 0 dan katta bo'lishi kerak",
-        status: "error",
-        duration: 3500,
-      });
+      toastService.error("Yurgan km 0 dan katta bo'lishi kerak");
       return;
     }
 
@@ -1813,6 +1898,8 @@ function CostPage() {
     const odometerEnd = odometerStart + Number(editForm.distance);
 
     setIsSavingEdit(true);
+    const loadingToastId = toastService.loading("Yangilanmoqda...");
+
     try {
       const response = await apiCost.Update(editingId, {
         odometer_start: odometerStart,
@@ -1828,16 +1915,13 @@ function CostPage() {
         );
       }
 
-      toast({ title: "Yozuv yangilandi", status: "success", duration: 2500 });
+      toastService.dismiss(loadingToastId);
+      toastService.success("Yozuv yangilandi");
       cancelEdit();
       loadExpenses();
     } catch (err) {
-      toast({
-        title: "Saqlab bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toastService.dismiss(loadingToastId);
+      toastService.error("Saqlab bo'lmadi: " + err.message);
     } finally {
       setIsSavingEdit(false);
     }
@@ -1851,18 +1935,16 @@ function CostPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
+    const loadingToastId = toastService.loading("O'chirilmoqda...");
     try {
       await apiCost.Delete(deleteTarget.id);
-      toast({ title: "Yozuv o'chirildi", status: "success", duration: 2500 });
+      toastService.dismiss(loadingToastId);
+      toastService.success("Yozuv o'chirildi");
       deleteDialog.onClose();
       loadExpenses();
     } catch (err) {
-      toast({
-        title: "O'chirib bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toastService.dismiss(loadingToastId);
+      toastService.error("O'chirib bo'lmadi: " + err.message);
     } finally {
       setIsDeleting(false);
     }
@@ -1870,7 +1952,6 @@ function CostPage() {
 
   const noCarSelected = !selectedCarId;
 
-  // ========== RENDER ==========
   return (
     <Box
       bg="bg"
@@ -1880,7 +1961,6 @@ function CostPage() {
       px={{ base: 3, md: 5, xl: 6 }}
       py={{ base: 4, md: 8 }}
     >
-      {/* Sarlavha va toggle */}
       <Box mb={6}>
         <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
           <Box>
@@ -1896,37 +1976,37 @@ function CostPage() {
               Mashinaning kunlik yoqilg'i xarajatlari va sarf statistikasi
             </Text>
           </Box>
-          <IconButton
-            aria-label="Mashinalarni ko'rsatish"
-            icon={showCards ? <LayoutGrid size={18} /> : <List size={18} />}
-            size="sm"
-            variant={showCards ? "solid" : "outline"}
-            colorScheme={showCards ? "primary" : "gray"}
-            onClick={() => setShowCards(!showCards)}
-            borderRadius="md"
-            borderColor="border"
-          />
+          <Tooltip
+            label={showCards ? "Ro'yxat ko'rinishi" : "Kartochka ko'rinishi"}
+            hasArrow
+            placement="left"
+          >
+            <IconButton
+              aria-label="Mashinalar ko'rinishini almashtirish"
+              icon={showCards ? <List size={18} /> : <LayoutGrid size={18} />}
+              size="sm"
+              variant={showCards ? "solid" : "outline"}
+              colorScheme={showCards ? "primary" : "gray"}
+              onClick={() => setShowCards((prev) => !prev)}
+              borderRadius="md"
+              borderColor="border"
+            />
+          </Tooltip>
         </Flex>
       </Box>
 
-      {/* FILTER PANEL – always visible */}
       <CarSelector
         filters={filters}
         onFilterChange={updateFilters}
         fuelTypes={fuelTypes}
         fuelTypesLoading={fuelTypesLoading}
-      />
-
-      {/* CAR CARDS – visible only when toggled */}
-      <StatusCards
         cars={cars}
+        carsLoading={carsLoading}
         selectedCarId={selectedCarId}
         onCarChange={handleCarChange}
-        carsLoading={carsLoading}
         showCards={showCards}
       />
 
-      {/* TABLE */}
       <Box
         bg="surface"
         borderRadius="2xl"
@@ -1957,6 +2037,7 @@ function CostPage() {
           isSavingEdit={isSavingEdit}
           onDelete={askDelete}
           selectedCarId={selectedCarId}
+          totals={totals}
         />
       </Box>
 

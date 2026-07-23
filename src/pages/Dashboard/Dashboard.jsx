@@ -9,84 +9,52 @@ import {
   CardHeader,
   CardBody,
   Heading,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
   Flex,
+  HStack,
   Center,
   Badge,
   Text,
-  Avatar,
-  Skeleton,
   Select,
-  Divider,
+  Skeleton,
   useToast,
   useColorModeValue,
 } from "@chakra-ui/react";
-import { Fuel, Wallet, Route } from "lucide-react";
+import { Users, Car as CarIcon, UserCog, Fuel } from "lucide-react";
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
+  ComposedChart,
+  Line,
 } from "recharts";
-import { apiCost } from "../../Services/api/apiCost";
+import { apiStatistika } from "../../Services/api/apiStatistika";
+import { apiCars } from "../../Services/api/Cars";
 
-const FUEL_CHART_COLORS = [
-  "#3B82F6",
-  "#F59E0B",
-  "#10B981",
-  "#8B5CF6",
-  "#EF4444",
-  "#06B6D4",
+const MONTH_LABELS = [
+  "Yan",
+  "Fev",
+  "Mar",
+  "Apr",
+  "May",
+  "Iyun",
+  "Iyul",
+  "Avg",
+  "Sen",
+  "Okt",
+  "Noy",
+  "Dek",
 ];
 
-const IGNORED_EXPENSE_KEYS = [
-  "id",
-  "_id",
-  "car_id",
-  "fuel_id",
-  "createdAt",
-  "updatedAt",
-  "__v",
-];
-
-// Backend'dan kelgan xom maydon nomlarini (fuel_name, mileage,
-// is_holiday va h.k.) o'zbekcha sarlavhaga aylantirish uchun lug'at.
-// Ro'yxatda yo'q nom kelsa, fallback sifatida labelize() orqali
-// chiroyli formatga keltirilib chiqariladi.
-const EXPENSE_COLUMN_LABELS = {
-  fuel_name: "Yoqilg'i turi",
-  fuel_unit: "Birlik",
-  mileage: "Bosib o'tilgan (km)",
-  distance: "Bosib o'tilgan (km)",
-  km: "Bosib o'tilgan (km)",
-  received_amount: "Qabul qilingan yoqilg'i",
-  received: "Qabul qilingan",
-  fuel_expence: "Sarflangan",
-  fuel_expense: "Sarflangan",
-  expense: "Sarflangan",
-  balance_after: "Qoldiq (yoqilg'i)",
-  balance: "Qoldiq",
-  start_balance: "Boshlang'ich qoldiq",
-  end_balance: "Oxirgi qoldiq",
-  is_holiday: "Dam olish kuni",
-  note: "Izoh",
-  comment: "Izoh",
-  description: "Izoh",
-  price: "Narx",
-  driver_name: "Haydovchi",
-  odometer: "Odometr",
+// Xodim rollarini o'zbekcha ko'rsatish uchun lug'at
+const ROLE_LABELS = {
+  driver: "Haydovchilar",
+  responsible: "Mas'ullar",
+  admin: "Adminlar",
+  manager: "Menejerlar",
 };
 
 function formatSum(n) {
@@ -105,107 +73,62 @@ function pick(obj, keys, fallback = 0) {
   return fallback;
 }
 
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload;
+  const nested = pick(payload, ["items", "data", "results"], null);
+  if (Array.isArray(nested)) return nested;
+  return [];
+}
+
 function labelize(key) {
-  if (EXPENSE_COLUMN_LABELS[key]) return EXPENSE_COLUMN_LABELS[key];
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// key parametri orqali maxsus maydonlarni (masalan is_holiday)
-// alohida o'zbekcha qiymatga o'girish imkonini beradi.
-function formatCell(value, key) {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "boolean") return value ? "Ha" : "Yo'q";
-  if (key === "is_holiday") return value ? "Ha" : "Yo'q";
-  if (typeof value === "number") return formatNumberSimple(value);
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+function roleLabel(role) {
+  if (ROLE_LABELS[role]) return ROLE_LABELS[role];
+  return labelize(String(role || ""));
 }
 
-function normalizeCarStat(entry) {
-  const carRaw = pick(entry, ["car"], {});
-  const id = pick(carRaw, ["id", "_id", "uuid"], null);
-  const name = pick(
-    carRaw,
-    ["name", "model", "car_name", "title"],
-    id ?? "Noma'lum",
-  );
+function normalizeCarOption(raw) {
+  const id = pick(raw, ["id", "_id", "uuid"], null);
+  const name = pick(raw, ["name", "model", "car_name", "title", "brand"], null);
   const plate = pick(
-    carRaw,
+    raw,
     ["plate_number", "gov_number", "number", "plate"],
-    "—",
+    null,
   );
-  const driverName =
-    carRaw?.driver?.full_name || pick(carRaw, ["driver_name"], null);
-
-  const fuelsRaw = pick(entry, ["fuels", "fuel_reports"], []);
-  const fuelsList = Array.isArray(fuelsRaw) ? fuelsRaw : [];
-
-  const fuelBreakdown = fuelsList.map((fr) => normalizeFuelReport(fr));
-
-  const km = fuelBreakdown.reduce((s, f) => s + f.mileage, 0);
-  const summa = fuelBreakdown.reduce((s, f) => s + f.sum, 0);
-  const balance = fuelBreakdown.reduce((s, f) => s + f.endBalance, 0);
-
-  return {
-    id,
-    name: String(name),
-    plate: String(plate),
-    driver: driverName ? String(driverName) : "—",
-    fuelBreakdown,
-    km,
-    summa,
-    balance,
-  };
-}
-
-/**
- * Bitta "fuel_reports" elementini normallashtirish.
- * Summa hisobi: sarflangan miqdor (litr) × narx (so'm/litr) = jami summa.
- * Bu formula backend'dagi raqamlar bilan tekshirildi va to'g'ri:
- * masalan 3.4 litr × 9300 so'm = 31,620 so'm.
- */
-function normalizeFuelReport(fr) {
-  const fuelMeta = pick(fr, ["fuel"], {});
-  const price = Number(pick(fuelMeta, ["price", "unit_price"], 0));
-  const expense = Number(
-    pick(fr, ["total_fuel_expence", "total_fuel_expense", "fuel_expence"], 0),
-  );
-
-  return {
-    fuelId: pick(fr, ["fuel_id"], fuelMeta.id || Math.random()),
-    name: pick(fuelMeta, ["name", "label"], "Noma'lum"),
-    unit: pick(fuelMeta, ["unit", "measure"], ""),
-    price,
-    mileage: Number(pick(fr, ["total_mileage", "distance", "km"], 0)),
-    received: Number(pick(fr, ["total_received", "received_amount"], 0)),
-    expense,
-    sum: expense * price,
-    startBalance: Number(pick(fr, ["start_balance"], 0)),
-    endBalance: Number(pick(fr, ["end_balance", "balance_after"], 0)),
-  };
+  const label = [name, plate].filter(Boolean).join(" — ") || id || "Noma'lum";
+  return { id, label: String(label) };
 }
 
 // Statistika kartasi — barcha ranglar useColorModeValue orqali,
 // shu sabab dark/light rejim o'zgarganda avtomatik moslashadi
-function StatCard({ icon: IconCmp, label, value, suffix }) {
+function StatCard({ icon: IconCmp, label, value, suffix, accent = "gray" }) {
   const cardBg = useColorModeValue("white", "gray.800");
   const cardBorder = useColorModeValue("gray.200", "gray.700");
   const labelColor = useColorModeValue("gray.500", "gray.400");
   const valueColor = useColorModeValue("gray.800", "gray.100");
-  const iconBg = useColorModeValue("gray.100", "gray.700");
-  const iconColor = useColorModeValue("gray.700", "gray.200");
+  const iconBg = useColorModeValue(`${accent}.50`, `${accent}.900`);
+  const iconColor = useColorModeValue(`${accent}.600`, `${accent}.300`);
 
   return (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="2xl"
       borderWidth="1px"
       borderColor={cardBorder}
       p={5}
+      transition="all 0.15s ease"
+      _hover={{ shadow: "md", transform: "translateY(-2px)" }}
     >
       <Flex justify="space-between" align="center">
         <Stat>
-          <StatLabel color={labelColor} fontSize="xs" fontWeight="bold">
+          <StatLabel
+            color={labelColor}
+            fontSize="xs"
+            fontWeight="bold"
+            letterSpacing="0.03em"
+          >
             {label.toUpperCase()}
           </StatLabel>
           <StatNumber
@@ -222,10 +145,29 @@ function StatCard({ icon: IconCmp, label, value, suffix }) {
             )}
           </StatNumber>
         </Stat>
-        <Center bg={iconBg} borderRadius="lg" boxSize="42px" flexShrink={0}>
-          <IconCmp size={20} style={{ color: iconColor }} />
+        <Center bg={iconBg} borderRadius="xl" boxSize="46px" flexShrink={0}>
+          <IconCmp size={22} style={{ color: iconColor }} />
         </Center>
       </Flex>
+    </Box>
+  );
+}
+
+// Yillik jami ko'rsatkichlar — tanlangan mashina + yoqilg'i turi bo'yicha
+function MiniStat({ label, value, labelColor, valueColor }) {
+  return (
+    <Box>
+      <Text
+        fontSize="10px"
+        fontWeight="bold"
+        color={labelColor}
+        letterSpacing="0.03em"
+      >
+        {label.toUpperCase()}
+      </Text>
+      <Text fontSize="md" fontWeight="bold" color={valueColor} mt={0.5}>
+        {value}
+      </Text>
     </Box>
   );
 }
@@ -244,12 +186,16 @@ function Dashboard() {
   const tooltipBorder = useColorModeValue("#e5e7eb", "#4b5563");
   const tooltipTextColor = useColorModeValue("#1f2937", "#f3f4f6");
   const axisTickColor = useColorModeValue("#6b7280", "#9ca3af");
-  const highlightRowBg = useColorModeValue("blue.50", "blue.900");
   const emptyTextColor = useColorModeValue("gray.500", "gray.400");
-  const linkColor = useColorModeValue("blue.600", "blue.300");
-  const avatarBg = useColorModeValue("blue.500", "blue.400");
   const badgeBg = useColorModeValue("gray.100", "gray.700");
   const badgeColor = useColorModeValue("gray.700", "gray.200");
+  const selectBg = useColorModeValue("white", "gray.800");
+  const selectBorder = useColorModeValue("gray.200", "gray.700");
+  const iconPillBg = useColorModeValue("purple.50", "purple.900");
+  const iconPillColor = useColorModeValue("purple.600", "purple.300");
+  const fuelPillBg = useColorModeValue("teal.50", "teal.900");
+  const fuelPillColor = useColorModeValue("teal.600", "teal.300");
+  const statBoxBg = useColorModeValue("gray.50", "gray.900");
 
   const tooltipContentStyle = {
     borderRadius: "10px",
@@ -260,194 +206,152 @@ function Dashboard() {
   };
 
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
 
-  // --- 1) Barcha mashinalar bo'yicha oylik statistika ---
-  const [vehicles, setVehicles] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // --- 0) Umumiy xodimlar va mashinalar soni ---
+  const [counts, setCounts] = useState({ roles: [], totalCars: 0 });
+  const [countsLoading, setCountsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setCountsLoading(true);
 
-    const loadAll = async () => {
-      const response = await apiCost.MonthlyStatistics(currentMonth, {
-        is_active: true,
+    apiStatistika
+      .AllEmployeesAndCarsCounts()
+      .then((response) => {
+        if (cancelled) return;
+        setCounts({
+          roles: pick(response, ["totalEmployees"], []),
+          totalCars: pick(response, ["totalCars"], 0),
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        toast({
+          title: "Xodimlar sonini yuklab bo'lmadi",
+          description: err.message,
+          status: "error",
+          duration: 4000,
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setCountsLoading(false);
       });
-
-      const carsRaw = pick(response, ["cars"], []);
-      const carsList = Array.isArray(carsRaw) ? carsRaw : [];
-      const normalized = carsList.map(normalizeCarStat);
-
-      if (cancelled) return;
-      setVehicles(normalized);
-      setLoading(false);
-
-      if (normalized.length > 0) {
-        setSelectedCarId((prev) => prev || normalized[0].id);
-      }
-    };
-
-    loadAll().catch((err) => {
-      if (cancelled) return;
-      toast({
-        title: "Statistikani yuklab bo'lmadi",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
-      setVehicles([]);
-      setLoading(false);
-    });
 
     return () => {
       cancelled = true;
     };
-  }, [currentMonth, toast]);
+  }, [toast]);
 
-  // --- 2) Tanlangan mashina bo'yicha oylik hisobot (fuel_reports) ---
+  // --- 1) Mashinalar ro'yxati (select uchun) ---
+  const [cars, setCars] = useState([]);
+  const [carsLoading, setCarsLoading] = useState(true);
   const [selectedCarId, setSelectedCarId] = useState("");
-  const [fuelReports, setFuelReports] = useState([]);
-  const [fuelReportsLoading, setFuelReportsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCarsLoading(true);
+
+    apiCars
+      .All(1, 100, "", true, "", "", "name", "ASC")
+      .then((response) => {
+        if (cancelled) return;
+        const raw = extractList(response?.data);
+        const normalized = raw.map(normalizeCarOption);
+        setCars(normalized);
+        if (normalized.length === 1) {
+          setSelectedCarId(normalized[0].id);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        toast({
+          title: "Mashinalar ro'yxatini yuklab bo'lmadi",
+          description: err.message,
+          status: "error",
+          duration: 4000,
+        });
+        setCars([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCarsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [toast]);
+
+  // --- 2) Tanlangan mashina uchun yillik statistika ---
+  const [yearlyCar, setYearlyCar] = useState(null); // { car, fuels: [...] }
+  const [yearlyLoading, setYearlyLoading] = useState(false);
   const [selectedFuelId, setSelectedFuelId] = useState("");
 
   useEffect(() => {
     if (!selectedCarId) {
-      setFuelReports([]);
+      setYearlyCar(null);
+      setSelectedFuelId("");
       return;
     }
-    let cancelled = false;
-    setFuelReportsLoading(true);
 
-    apiCost
-      .MonthlyReport(selectedCarId, currentMonth)
+    let cancelled = false;
+    setYearlyLoading(true);
+
+    apiStatistika
+      .YearlyStatistics(currentYear, { car_id: selectedCarId })
       .then((response) => {
         if (cancelled) return;
-        const reportsRaw = pick(response, ["fuel_reports"], []);
-        const reportsList = Array.isArray(reportsRaw) ? reportsRaw : [];
-        const normalized = reportsList.map(normalizeFuelReport);
-        setFuelReports(normalized);
-        setSelectedFuelId(normalized.length > 0 ? normalized[0].fuelId : "");
+        const carsArr = pick(response, ["cars"], []);
+        const carEntry = Array.isArray(carsArr) ? carsArr[0] : null;
+        setYearlyCar(carEntry || null);
+
+        const fuels = pick(carEntry, ["fuels"], []);
+        setSelectedFuelId((prev) => {
+          if (prev && fuels.some((f) => f.fuel_id === prev)) return prev;
+          return fuels.length > 0 ? fuels[0].fuel_id : "";
+        });
       })
       .catch((err) => {
         if (cancelled) return;
-        // 404 — bu mashina uchun shu oyda hisobot yozuvi yo'q, xato emas
-        if (err?.response?.status === 404) {
-          setFuelReports([]);
-          setSelectedFuelId("");
-          return;
-        }
         toast({
-          title: "Mashina hisobotini yuklab bo'lmadi",
+          title: "Yillik statistikani yuklab bo'lmadi",
           description: err.message,
           status: "error",
           duration: 4000,
         });
-        setFuelReports([]);
-        setSelectedFuelId("");
+        setYearlyCar(null);
       })
       .finally(() => {
-        if (!cancelled) setFuelReportsLoading(false);
+        if (!cancelled) setYearlyLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [selectedCarId, currentMonth, toast]);
+  }, [selectedCarId, currentYear, toast]);
 
-  // --- 3) Tanlangan mashina + yoqilg'i bo'yicha kunlik yozuvlar ---
-  const [dailyDays, setDailyDays] = useState([]);
-  const [dailyLoading, setDailyLoading] = useState(false);
+  const fuels = yearlyCar?.fuels || [];
+  const selectedFuel =
+    fuels.find((f) => f.fuel_id === selectedFuelId) || fuels[0] || null;
 
-  useEffect(() => {
-    if (!selectedCarId || !selectedFuelId) {
-      setDailyDays([]);
-      return;
-    }
-    let cancelled = false;
-    setDailyLoading(true);
-
-    apiCost
-      .CarMonthlyReport(selectedCarId, currentMonth, selectedFuelId)
-      .then((response) => {
-        if (cancelled) return;
-        const daysRaw = pick(response, ["days"], []);
-        setDailyDays(Array.isArray(daysRaw) ? daysRaw : []);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err?.response?.status === 404) {
-          setDailyDays([]);
-          return;
-        }
-        toast({
-          title: "Kunlik hisobotni yuklab bo'lmadi",
-          description: err.message,
-          status: "error",
-          duration: 4000,
-        });
-        setDailyDays([]);
-      })
-      .finally(() => {
-        if (!cancelled) setDailyLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCarId, selectedFuelId, currentMonth, toast]);
-
-  const totalKm = vehicles.reduce((s, v) => s + v.km, 0);
-  const totalSumAll = vehicles.reduce((s, v) => s + v.summa, 0);
-  const totalBalance = vehicles.reduce((s, v) => s + v.balance, 0);
-
-  const fuelBreakdownList = useMemo(() => {
-    const map = {};
-    vehicles.forEach((v) => {
-      v.fuelBreakdown.forEach((f) => {
-        if (!map[f.fuelId]) {
-          map[f.fuelId] = {
-            fuelId: f.fuelId,
-            name: f.name,
-            unit: f.unit,
-            expense: 0,
-            sum: 0,
-          };
-        }
-        map[f.fuelId].expense += f.expense;
-        map[f.fuelId].sum += f.sum;
-      });
+  const chartData = useMemo(() => {
+    if (!selectedFuel) return [];
+    const byMonth = {};
+    (selectedFuel.monthly_breakdown || []).forEach((m) => {
+      byMonth[m.month] = m;
     });
-    return Object.values(map);
-  }, [vehicles]);
-
-  function fuelSummaryText(vehicle) {
-    if (!vehicle.fuelBreakdown.length) return "—";
-    return vehicle.fuelBreakdown
-      .map((f) => `${formatNumberSimple(f.expense)} ${f.unit}`)
-      .join(", ");
-  }
-
-  const selectedCar = vehicles.find((v) => v.id === selectedCarId) || null;
-
-  const daysWithExpenses = useMemo(
-    () =>
-      dailyDays.filter(
-        (d) => Array.isArray(d.expenses) && d.expenses.length > 0,
-      ),
-    [dailyDays],
-  );
-
-  const expenseColumns = useMemo(() => {
-    const keys = new Set();
-    daysWithExpenses.forEach((d) => {
-      d.expenses.forEach((exp) => {
-        Object.keys(exp || {}).forEach((k) => {
-          if (!IGNORED_EXPENSE_KEYS.includes(k)) keys.add(k);
-        });
-      });
+    return MONTH_LABELS.map((label, idx) => {
+      const m = byMonth[idx + 1] || {};
+      return {
+        month: label,
+        summa: Number(m.total_reaceved_price) || 0,
+        expense: Number(m.total_fuel_expence) || 0,
+      };
     });
-    return Array.from(keys);
-  }, [daysWithExpenses]);
+  }, [selectedFuel]);
+
+  const yearlyTotal = selectedFuel?.yearly_total || null;
+  const fuelUnit = selectedFuel?.fuel_unit || "";
 
   return (
     <Box p={{ base: 4, md: 6 }} bg={pageBg} minH="100vh">
@@ -461,7 +365,7 @@ function Dashboard() {
       >
         <Box>
           <Heading size="lg" color={headingColor}>
-            Dashboard
+            Bosh sahifa
           </Heading>
           <Text color={subTextColor} fontSize="sm" mt={1}>
             Avtomobil yoqilg'i hisoboti — {currentMonth}
@@ -471,9 +375,9 @@ function Dashboard() {
           fontSize="sm"
           bg={badgeBg}
           color={badgeColor}
-          px={2}
-          py={1}
-          borderRadius="md"
+          px={3}
+          py={1.5}
+          borderRadius="full"
         >
           {new Date().toLocaleDateString("uz-UZ", {
             day: "numeric",
@@ -483,415 +387,295 @@ function Dashboard() {
         </Badge>
       </Flex>
 
-      {/* UMUMIY STATISTIKA */}
-      <SimpleGrid columns={{ base: 1, sm: 2, xl: 3 }} spacing={5} mb={5}>
-        {loading ? (
-          [...Array(3)].map((_, i) => (
-            <Skeleton key={i} height="100px" borderRadius="xl" />
+      {/* XODIMLAR VA MASHINALAR SONI */}
+      <SimpleGrid
+        columns={{
+          base: 1,
+          sm: 2,
+          xl: Math.min((counts.roles?.length || 0) + 1, 4) || 2,
+        }}
+        spacing={5}
+        mb={5}
+      >
+        {countsLoading ? (
+          [...Array(2)].map((_, i) => (
+            <Skeleton key={i} height="100px" borderRadius="2xl" />
           ))
         ) : (
           <>
             <StatCard
-              icon={Wallet}
-              label="Qoldiq balans"
-              value={formatNumberSimple(totalBalance)}
+              icon={CarIcon}
+              label="Jami mashinalar"
+              value={formatNumberSimple(counts.totalCars)}
+              accent="purple"
             />
-            <StatCard
-              icon={Fuel}
-              label="Jami xarajat (oy)"
-              value={formatNumberSimple(totalSumAll)}
-              suffix="so'm"
-            />
-            <StatCard
-              icon={Route}
-              label="Jami kilometraj"
-              value={formatNumberSimple(totalKm)}
-              suffix="km"
-            />
+            {counts.roles.map((r) => (
+              <StatCard
+                key={r.role}
+                icon={r.role === "driver" ? UserCog : Users}
+                label={roleLabel(r.role)}
+                value={formatNumberSimple(r.count)}
+                accent="teal"
+              />
+            ))}
           </>
         )}
       </SimpleGrid>
 
-      {/* YOQILG'I TURLARI BO'YICHA KARTALAR */}
-      {!loading && fuelBreakdownList.length > 0 && (
-        <SimpleGrid
-          columns={{
-            base: 1,
-            sm: 2,
-            xl: Math.min(fuelBreakdownList.length, 4),
-          }}
-          spacing={5}
-          mb={6}
-        >
-          {fuelBreakdownList.map((f) => (
-            <StatCard
-              key={f.fuelId}
-              icon={Fuel}
-              label={`${f.name} sarfi (oy)`}
-              value={formatNumberSimple(f.expense)}
-              suffix={f.unit}
-            />
-          ))}
-        </SimpleGrid>
-      )}
-
-      {/* GRAFIKLAR */}
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={5} mb={8}>
-        <Card bg={cardBg} border="1px solid" borderColor={cardBorder}>
-          <CardHeader>
-            <Heading size="sm" color={headingColor}>
-              Avtomobillar bo'yicha xarajat
-            </Heading>
-          </CardHeader>
-          <CardBody pt={0}>
-            {loading ? (
-              <Skeleton height="290px" borderRadius="lg" />
-            ) : vehicles.length === 0 ? (
-              <Center h="290px">
-                <Text color={emptyTextColor} fontSize="sm">
-                  Bu oy uchun ma'lumot yo'q
-                </Text>
-              </Center>
-            ) : (
-              <Box h="290px">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={vehicles} barSize={38}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke={gridStrokeColor}
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="name"
-                      fontSize={11}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: axisTickColor }}
-                    />
-                    <YAxis
-                      fontSize={11}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: axisTickColor }}
-                    />
-                    <Tooltip
-                      formatter={(v) => formatSum(v)}
-                      contentStyle={tooltipContentStyle}
-                    />
-                    <Bar dataKey="summa" radius={[8, 8, 0, 0]} fill="#3B82F6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-          </CardBody>
-        </Card>
-
-        <Card bg={cardBg} border="1px solid" borderColor={cardBorder}>
-          <CardHeader>
-            <Heading size="sm" color={headingColor}>
-              Yoqilg'i turi bo'yicha taqsimot
-            </Heading>
-          </CardHeader>
-          <CardBody pt={0}>
-            {loading ? (
-              <Skeleton height="290px" borderRadius="lg" />
-            ) : fuelBreakdownList.length === 0 ? (
-              <Center h="290px">
-                <Text color={emptyTextColor} fontSize="sm">
-                  Bu oy uchun ma'lumot yo'q
-                </Text>
-              </Center>
-            ) : (
-              <Box h="290px">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={fuelBreakdownList}
-                      dataKey="sum"
-                      nameKey="name"
-                      innerRadius={70}
-                      outerRadius={105}
-                      paddingAngle={4}
-                    >
-                      {fuelBreakdownList.map((f, i) => (
-                        <Cell
-                          key={f.fuelId}
-                          fill={FUEL_CHART_COLORS[i % FUEL_CHART_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v) => formatSum(v)}
-                      contentStyle={tooltipContentStyle}
-                    />
-                    <Legend
-                      iconType="circle"
-                      wrapperStyle={{ fontSize: "13px", color: axisTickColor }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-          </CardBody>
-        </Card>
-      </SimpleGrid>
-
-      {/* MASHINALAR RO'YXATI (monthly-statistics) */}
-      <Card bg={cardBg} border="1px solid" borderColor={cardBorder} mb={8}>
-        <CardHeader>
-          <Flex justify="space-between" align="center">
-            <Heading size="sm" color={headingColor}>
-              Avtomobillar ro'yxati
-            </Heading>
-            <Badge
-              fontSize="xs"
-              bg={badgeBg}
-              color={badgeColor}
-              px={2}
-              py={1}
-              borderRadius="md"
-            >
-              {vehicles.length} TA
-            </Badge>
-          </Flex>
-        </CardHeader>
-        <CardBody pt={0} overflowX="auto">
-          {loading ? (
-            <Box py={4}>
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} height="42px" my={2} borderRadius="md" />
-              ))}
-            </Box>
-          ) : vehicles.length === 0 ? (
-            <Center py={10}>
-              <Text color={emptyTextColor} fontSize="sm">
-                Mashinalar topilmadi
-              </Text>
-            </Center>
-          ) : (
-            <Table variant="simple" size="sm">
-              <Thead>
-                <Tr>
-                  <Th>Avtomobil</Th>
-                  <Th>Davlat raqami</Th>
-                  <Th>Haydovchi</Th>
-                  <Th isNumeric>Sarflangan</Th>
-                  <Th isNumeric>Summa</Th>
-                  <Th></Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {vehicles.map((v) => (
-                  <Tr
-                    key={v.id}
-                    bg={v.id === selectedCarId ? highlightRowBg : undefined}
-                  >
-                    <Td>
-                      <Flex align="center" gap={3}>
-                        <Avatar
-                          size="sm"
-                          name={v.name}
-                          bg={avatarBg}
-                          color="white"
-                        />
-                        <Text fontWeight="600" color={headingColor}>
-                          {v.name}
-                        </Text>
-                      </Flex>
-                    </Td>
-                    <Td color={subTextColor}>{v.plate}</Td>
-                    <Td color={subTextColor}>{v.driver}</Td>
-                    <Td isNumeric color={subTextColor}>
-                      {fuelSummaryText(v)}
-                    </Td>
-                    <Td isNumeric fontWeight="600" color={headingColor}>
-                      {formatSum(v.summa)}
-                    </Td>
-                    <Td>
-                      <Text
-                        as="button"
-                        fontSize="sm"
-                        color={linkColor}
-                        fontWeight="600"
-                        onClick={() => setSelectedCarId(v.id)}
-                      >
-                        Batafsil
-                      </Text>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          )}
-        </CardBody>
-      </Card>
-
-      {/* BATAFSIL HISOBOT — tanlangan mashina */}
-      <Card bg={cardBg} border="1px solid" borderColor={cardBorder} mb={8}>
-        <CardHeader>
+      {/* YILLIK XARAJAT VA YOQILG'I SARFI DINAMIKASI — mashina + yoqilg'i turi bo'yicha real ma'lumot */}
+      <Card
+        bg={cardBg}
+        border="1px solid"
+        borderColor={cardBorder}
+        borderRadius="2xl"
+        overflow="hidden"
+        mt={5}
+      >
+        <CardHeader pb={0}>
           <Flex
             justify="space-between"
             align={{ base: "start", md: "center" }}
             direction={{ base: "column", md: "row" }}
             gap={3}
           >
-            <Heading size="sm" color={headingColor}>
-              Batafsil hisobot
-            </Heading>
-            <Flex gap={3} wrap="wrap">
-              <Select
-                size="sm"
-                width="220px"
-                placeholder="Avtomobilni tanlang"
-                value={selectedCarId}
-                onChange={(e) => setSelectedCarId(e.target.value)}
-              >
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.plate})
-                  </option>
-                ))}
-              </Select>
-              <Select
-                size="sm"
-                width="180px"
-                placeholder="Yoqilg'i turi"
-                value={selectedFuelId}
-                onChange={(e) => setSelectedFuelId(e.target.value)}
-                isDisabled={fuelReports.length === 0}
-              >
-                {fuelReports.map((f) => (
-                  <option key={f.fuelId} value={f.fuelId}>
-                    {f.name}
-                  </option>
-                ))}
-              </Select>
-            </Flex>
+            <Box>
+              <Heading size="sm" color={headingColor}>
+                Yillik xarajat va yoqilg'i sarfi dinamikasi
+              </Heading>
+              <Text color={subTextColor} fontSize="xs" mt={1}>
+                {currentYear}-yil, oylar kesimida
+              </Text>
+            </Box>
+
+            <HStack spacing={2.5} wrap="wrap">
+              {/* Mashina select */}
+              {carsLoading ? (
+                <Skeleton h="38px" w="220px" borderRadius="lg" />
+              ) : (
+                <HStack
+                  spacing={0}
+                  borderWidth="1px"
+                  borderColor={selectedCarId ? "purple.400" : selectBorder}
+                  borderRadius="lg"
+                  overflow="hidden"
+                  bg={selectBg}
+                  transition="all 0.2s ease"
+                >
+                  <Center
+                    boxSize="38px"
+                    bg={iconPillBg}
+                    color={iconPillColor}
+                    flexShrink={0}
+                  >
+                    <CarIcon size={17} />
+                  </Center>
+                  <Select
+                    value={selectedCarId}
+                    onChange={(e) => setSelectedCarId(e.target.value)}
+                    size="sm"
+                    h="38px"
+                    minW="190px"
+                    border="none"
+                    borderRadius="0"
+                    placeholder="Mashinani tanlang"
+                    bg="transparent"
+                    color={headingColor}
+                    fontWeight="600"
+                    _focus={{ boxShadow: "none" }}
+                  >
+                    {cars.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </Select>
+                </HStack>
+              )}
+
+              {/* Yoqilg'i turi select — faqat 2+ tur bo'lsa ko'rsatiladi */}
+              {!yearlyLoading && fuels.length > 1 && (
+                <HStack
+                  spacing={0}
+                  borderWidth="1px"
+                  borderColor={selectBorder}
+                  borderRadius="lg"
+                  overflow="hidden"
+                  bg={selectBg}
+                >
+                  <Center
+                    boxSize="38px"
+                    bg={fuelPillBg}
+                    color={fuelPillColor}
+                    flexShrink={0}
+                  >
+                    <Fuel size={16} />
+                  </Center>
+                  <Select
+                    value={selectedFuelId}
+                    onChange={(e) => setSelectedFuelId(e.target.value)}
+                    size="sm"
+                    h="38px"
+                    minW="140px"
+                    border="none"
+                    borderRadius="0"
+                    bg="transparent"
+                    color={headingColor}
+                    fontWeight="600"
+                    _focus={{ boxShadow: "none" }}
+                  >
+                    {fuels.map((f) => (
+                      <option key={f.fuel_id} value={f.fuel_id}>
+                        {f.fuel_name}
+                      </option>
+                    ))}
+                  </Select>
+                </HStack>
+              )}
+            </HStack>
           </Flex>
         </CardHeader>
-        <CardBody pt={0}>
+
+        <CardBody pt={4}>
           {!selectedCarId ? (
-            <Center py={10}>
+            <Center py={16} flexDirection="column" gap={3}>
+              <Center
+                bgGradient="linear(to-br, purple.500, teal.400)"
+                borderRadius="full"
+                boxSize="60px"
+                boxShadow="lg"
+                opacity={0.9}
+              >
+                <CarIcon size={24} color="white" />
+              </Center>
+              <Text color={headingColor} fontWeight="bold" fontSize="md" mt={1}>
+                Avval mashinani tanlang
+              </Text>
+              <Text
+                color={emptyTextColor}
+                fontSize="sm"
+                maxW="360px"
+                textAlign="center"
+              >
+                Yillik xarajat va yoqilg'i sarfi grafigini ko'rish uchun
+                yuqoridan mashinani tanlang
+              </Text>
+            </Center>
+          ) : yearlyLoading ? (
+            <Skeleton h="320px" borderRadius="lg" />
+          ) : !selectedFuel ? (
+            <Center py={16} flexDirection="column" gap={2}>
+              <Text color={headingColor} fontWeight="bold" fontSize="md">
+                Ma'lumot topilmadi
+              </Text>
               <Text color={emptyTextColor} fontSize="sm">
-                Batafsil ma'lumot ko'rish uchun avtomobilni tanlang
+                Tanlangan mashina uchun {currentYear}-yilda yoqilg'i yozuvlari
+                yo'q
               </Text>
             </Center>
           ) : (
             <>
-              {/* Oylik hisobot: fuel_reports jadvali */}
-              <Text fontWeight="600" mb={2} color={headingColor}>
-                {selectedCar?.name} — oylik yoqilg'i hisoboti
-              </Text>
-              {fuelReportsLoading ? (
-                <Skeleton height="120px" borderRadius="md" mb={6} />
-              ) : fuelReports.length === 0 ? (
-                <Center py={6} mb={6}>
-                  <Text color={emptyTextColor} fontSize="sm">
-                    Bu oy uchun yozuv yo'q
-                  </Text>
-                </Center>
-              ) : (
-                <Box overflowX="auto" mb={6}>
-                  <Table variant="simple" size="sm">
-                    <Thead>
-                      <Tr>
-                        <Th>Yoqilg'i turi</Th>
-                        <Th>Birlik</Th>
-                        <Th isNumeric>Bosib o'tilgan (km)</Th>
-                        <Th isNumeric>Qabul qilingan yoqilg'i</Th>
-                        <Th isNumeric>Sarflangan yoqilg'i</Th>
-                        <Th isNumeric>Summa</Th>
-                        <Th isNumeric>Boshlang'ich qoldiq</Th>
-                        <Th isNumeric>Oxirgi qoldiq</Th>
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      {fuelReports.map((f) => (
-                        <Tr
-                          key={f.fuelId}
-                          bg={
-                            f.fuelId === selectedFuelId
-                              ? highlightRowBg
-                              : undefined
-                          }
-                        >
-                          <Td fontWeight="600" color={headingColor}>
-                            {f.name}
-                          </Td>
-                          <Td color={subTextColor}>{f.unit}</Td>
-                          <Td isNumeric color={subTextColor}>
-                            {formatNumberSimple(f.mileage)}
-                          </Td>
-                          <Td isNumeric color={subTextColor}>
-                            {formatNumberSimple(f.received)}
-                          </Td>
-                          <Td isNumeric color={subTextColor}>
-                            {formatNumberSimple(f.expense)}
-                          </Td>
-                          <Td isNumeric color={headingColor} fontWeight="600">
-                            {formatSum(f.sum)}
-                          </Td>
-                          <Td isNumeric color={subTextColor}>
-                            {formatNumberSimple(f.startBalance)}
-                          </Td>
-                          <Td isNumeric color={subTextColor}>
-                            {formatNumberSimple(f.endBalance)}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                </Box>
+              {/* Yillik jami ko'rsatkichlar */}
+              {yearlyTotal && (
+                <SimpleGrid
+                  columns={{ base: 2, sm: 4 }}
+                  spacing={4}
+                  bg={statBoxBg}
+                  borderRadius="xl"
+                  p={4}
+                  mb={5}
+                >
+                  <MiniStat
+                    label="Yurgan masofa"
+                    value={`${formatNumberSimple(yearlyTotal.total_mileage)} km`}
+                    labelColor={subTextColor}
+                    valueColor={headingColor}
+                  />
+                  <MiniStat
+                    label="Olingan yoqilg'i"
+                    value={`${formatNumberSimple(yearlyTotal.total_received_amount)} ${fuelUnit}`}
+                    labelColor={subTextColor}
+                    valueColor={headingColor}
+                  />
+                  <MiniStat
+                    label="Sarflangan yoqilg'i"
+                    value={`${formatNumberSimple(yearlyTotal.total_fuel_expence)} ${fuelUnit}`}
+                    labelColor={subTextColor}
+                    valueColor={headingColor}
+                  />
+                  <MiniStat
+                    label="Jami xarajat"
+                    value={formatSum(yearlyTotal.total_reaceved_price)}
+                    labelColor={subTextColor}
+                    valueColor={headingColor}
+                  />
+                </SimpleGrid>
               )}
 
-              <Divider mb={6} borderColor={cardBorder} />
-
-              {/* Kunlik yozuvlar: car-monthly-report */}
-              <Text fontWeight="600" mb={2} color={headingColor}>
-                Kunlik yozuvlar
-              </Text>
-              {dailyLoading ? (
-                <Skeleton height="160px" borderRadius="md" />
-              ) : !selectedFuelId ? (
-                <Center py={6}>
-                  <Text color={emptyTextColor} fontSize="sm">
-                    Yoqilg'i turini tanlang
-                  </Text>
-                </Center>
-              ) : daysWithExpenses.length === 0 ? (
-                <Center py={6}>
-                  <Text color={emptyTextColor} fontSize="sm">
-                    Bu oy uchun kunlik yozuvlar yo'q
-                  </Text>
-                </Center>
-              ) : (
-                <Box overflowX="auto">
-                  <Table variant="simple" size="sm">
-                    <Thead>
-                      <Tr>
-                        <Th>Sana</Th>
-                        {expenseColumns.map((col) => (
-                          <Th key={col}>{labelize(col)}</Th>
-                        ))}
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      {daysWithExpenses.map((day) =>
-                        day.expenses.map((exp, idx) => (
-                          <Tr key={`${day.date}-${idx}`}>
-                            <Td color={subTextColor}>{day.date}</Td>
-                            {expenseColumns.map((col) => (
-                              <Td key={col} color={subTextColor}>
-                                {formatCell(exp?.[col], col)}
-                              </Td>
-                            ))}
-                          </Tr>
-                        )),
-                      )}
-                    </Tbody>
-                  </Table>
-                </Box>
-              )}
+              <Box h="320px">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={gridStrokeColor}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      fontSize={11}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: axisTickColor }}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      fontSize={11}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: axisTickColor }}
+                      tickFormatter={(v) => formatNumberSimple(v)}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      fontSize={11}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: axisTickColor }}
+                    />
+                    <Tooltip
+                      formatter={(v, name) =>
+                        name === "Xarajat"
+                          ? [formatSum(v), name]
+                          : [`${formatNumberSimple(v)} ${fuelUnit}`, name]
+                      }
+                      contentStyle={tooltipContentStyle}
+                      cursor={{ fill: gridStrokeColor, opacity: 0.3 }}
+                    />
+                    <Legend
+                      iconType="circle"
+                      wrapperStyle={{ fontSize: "13px", color: axisTickColor }}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="expense"
+                      name={`Sarflangan yoqilg'i (${fuelUnit})`}
+                      fill="#10B981"
+                      radius={[6, 6, 0, 0]}
+                      barSize={22}
+                    />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="summa"
+                      name="Xarajat"
+                      stroke="#3B82F6"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#3B82F6" }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </Box>
             </>
           )}
         </CardBody>
