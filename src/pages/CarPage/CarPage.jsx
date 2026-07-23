@@ -386,7 +386,7 @@ export default function CarPage() {
 
   // 🔢 Davlat raqamini "20 | 200 DAV" ko'rinishida (raqam va harflar orasida bo'sh joy bilan) formatlaydi
   const formatPlateNumber = (plate) => {
-    if (!plate) return { region: "01", main: "" };
+    if (!plate) return { region: "20", main: "" };
     const clean = plate.replace(/\s+/g, "").toUpperCase();
     const region = clean.slice(0, 2);
     const rest = clean.slice(2);
@@ -610,7 +610,6 @@ export default function CarPage() {
                                 >
                                   {car.name}
                                 </Text>
-                               
                               </HStack>
                               <Text fontSize="xs" color="textSecondary">
                                 Transport
@@ -619,72 +618,76 @@ export default function CarPage() {
                           </HStack>
                         </Td>
 
-                      
-<Td>
-  <Flex
-    align="center"
-    bg="white"
-    color="black"
-    border="1.5px solid #000"
-    borderRadius="lg"
-    overflow="hidden"
-    h="32px"
-    w="fit-content"
-    userSelect="none"
-  >
-    {/* 1. Viloyat kodi (is_electric bo'lsa YASHIL, aks holda OQ) */}
-    <Center
-      bg={car.is_electric ? "#70C837" : "white"}
-      px={2}
-      h="100%"
-    >
-      <Text
-        fontWeight="800"
-        fontSize="xs"
-        lineHeight="1"
-        fontFamily="monospace"
-        color="black"
-      >
-        {formatPlateNumber(car.plate_number).region}
-      </Text>
-    </Center>
+                        <Td>
+                          <Flex
+                            align="center"
+                            bg="white"
+                            color="black"
+                            border="1.5px solid #000"
+                            borderRadius="lg"
+                            overflow="hidden"
+                            h="32px"
+                            w="fit-content"
+                            userSelect="none"
+                          >
+                            {/* 1. Viloyat kodi (is_electric bo'lsa YASHIL, aks holda OQ) */}
+                            <Center
+                              bg={car.is_electric ? "#70C837" : "white"}
+                              px={2}
+                              h="100%"
+                            >
+                              <Text
+                                fontWeight="800"
+                                fontSize="xs"
+                                lineHeight="1"
+                                fontFamily="monospace"
+                                color="black"
+                              >
+                                {formatPlateNumber(car.plate_number).region}
+                              </Text>
+                            </Center>
 
-    {/* Tik ajratuvchi chiziq */}
-    <Box w="1.5px" bg="#000" alignSelf="stretch" />
+                            {/* Tik ajratuvchi chiziq */}
+                            <Box w="1.5px" bg="#000" alignSelf="stretch" />
 
-    {/* 2. Asosiy Raqam qismi (raqam va harflar orasida bo'sh joy bilan) */}
-    <Center px={2.5} h="100%">
-      <Text
-        fontWeight="800"
-        fontSize="xs"
-        fontFamily="monospace"
-        letterSpacing="1px"
-        textTransform="uppercase"
-        color="black"
-        whiteSpace="pre"
-      >
-        {formatPlateNumber(car.plate_number).main}
-      </Text>
-    </Center>
+                            {/* 2. Asosiy Raqam qismi (raqam va harflar orasida bo'sh joy bilan) */}
+                            <Center px={2.5} h="100%">
+                              <Text
+                                fontWeight="800"
+                                fontSize="xs"
+                                fontFamily="monospace"
+                                letterSpacing="1px"
+                                textTransform="uppercase"
+                                color="black"
+                                whiteSpace="pre"
+                              >
+                                {formatPlateNumber(car.plate_number).main}
+                              </Text>
+                            </Center>
 
-    {/* 3. Bayroqcha va UZ */}
-    <VStack spacing={0} align="center" pl={0.5} pr={1.5} justify="center">
-      <Text fontSize="9px" lineHeight="1">
-        🇺🇿
-      </Text>
-      <Text
-        fontSize="6.5px"
-        fontWeight="900"
-        color="#0033A0"
-        lineHeight="1"
-        mt="1px"
-      >
-        UZ
-      </Text>
-    </VStack>
-  </Flex>
-</Td>
-
+                            {/* 3. Bayroqcha va UZ */}
+                            <VStack
+                              spacing={0}
+                              align="center"
+                              pl={0.5}
+                              pr={1.5}
+                              justify="center"
+                            >
+                              <Text fontSize="9px" lineHeight="1">
+                                🇺🇿
+                              </Text>
+                              <Text
+                                fontSize="6.5px"
+                                fontWeight="900"
+                                color="#0033A0"
+                                lineHeight="1"
+                                mt="1px"
+                              >
+                                UZ
+                              </Text>
+                            </VStack>
+                          </Flex>
+                        </Td>
 
                         {/* 3. Haydovchi */}
                         <Td borderColor="border">
@@ -892,7 +895,7 @@ export default function CarPage() {
                 </FormLabel>
                 <Input
                   name="name"
-                  placeholder="Masalan: BYD Song Plus"
+                  placeholder="Masalan: Lacetti"
                   bg="surface"
                   color="text"
                   borderColor="border"
@@ -905,7 +908,7 @@ export default function CarPage() {
                 />
               </FormControl>
 
-              <FormControl isRequired>
+              <FormControl>
                 <Flex align="center" justify="space-between" mb={1.5}>
                   <FormLabel
                     fontSize="xs"
@@ -918,7 +921,6 @@ export default function CarPage() {
                     Davlat raqami
                   </FormLabel>
 
-                  {/* ⚡ ELEKTROMOBIL TOGGLE SWITCH */}
                   <HStack spacing={1.5}>
                     <Zap
                       size={13}
@@ -943,7 +945,6 @@ export default function CarPage() {
                   </HStack>
                 </Flex>
 
-                {/* Live Preview Davlat Raqami Input */}
                 <Flex
                   align="center"
                   bg="white"
@@ -984,7 +985,7 @@ export default function CarPage() {
                         const clean = (formData.plate_number || "")
                           .replace(/\s+/g, "")
                           .toUpperCase();
-                        if (clean.length === 0) return "01";
+                        if (clean.length === 0) return "20";
                         if (clean.length === 1) return clean;
                         return clean.slice(0, 2);
                       })()}
@@ -996,8 +997,9 @@ export default function CarPage() {
 
                   {/* 2. Asosiy Input */}
                   <Input
+                    isRequired
                     name="plate_number"
-                    placeholder="020 DAV yoki A 777 AA"
+                    placeholder=" A 123 AA"
                     variant="unstyled"
                     px={2.5}
                     fontWeight="800"
@@ -1070,7 +1072,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Mas'ul xodim */}
-              <FormControl>
+              <FormControl isRequired>
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
@@ -1102,7 +1104,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Haydovchi */}
-              <FormControl>
+              <FormControl isRequired>
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
@@ -1134,7 +1136,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Speedometer */}
-              <FormControl>
+              <FormControl isRequired>
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
@@ -1304,7 +1306,7 @@ export default function CarPage() {
                     >
                       {(() => {
                         const { region, main } = formatPlateNumber(
-                          selectedCar.plate_number
+                          selectedCar.plate_number,
                         );
                         return `${region} ${main}`.trim();
                       })()}
