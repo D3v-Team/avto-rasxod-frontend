@@ -1792,6 +1792,7 @@ function CostPage() {
         100,
         "",
         true,
+        false,
         "",
         "",
         "name",
