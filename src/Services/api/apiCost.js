@@ -93,6 +93,17 @@ class apiCost {
     });
     return response.data;
   };
+    static CarMonthlyReportExcel = async ({ car_id, fuel_id, year, month }) => {
+    const params = { car_id, year, month };
+    if (fuel_id) params.fuel_id = fuel_id;
+
+    // responseType: "blob" — fayl (xlsx) qaytganda MAJBURIY
+    const response = await $api.get(
+      "/car-daily-expenses/car-monthly-report-excel",
+      { params, responseType: "blob" },
+    );
+    return response;
+  };
 }
 
 export { apiCost };

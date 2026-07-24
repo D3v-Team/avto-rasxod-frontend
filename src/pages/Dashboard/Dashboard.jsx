@@ -16,10 +16,27 @@ import {
   Text,
   Select,
   Skeleton,
-  useToast,
   useColorModeValue,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
+  Button,
+  IconButton,
+  Spacer,
 } from "@chakra-ui/react";
-import { Users, Car as CarIcon, UserCog, Fuel } from "lucide-react";
+import {
+  Users,
+  Car as CarIcon,
+  UserCog,
+  Fuel,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import {
   Bar,
   XAxis,
@@ -33,7 +50,9 @@ import {
 } from "recharts";
 import { apiStatistika } from "../../Services/api/apiStatistika";
 import { apiCars } from "../../Services/api/Cars";
+import { toastService } from "../../utils/toast";
 
+// ------------------- KONSTANTALAR -------------------
 const MONTH_LABELS = [
   "Yan",
   "Fev",
@@ -49,7 +68,6 @@ const MONTH_LABELS = [
   "Dek",
 ];
 
-// Xodim rollarini o'zbekcha ko'rsatish uchun lug'at
 const ROLE_LABELS = {
   driver: "Haydovchilar",
   responsible: "Mas'ullar",
@@ -57,6 +75,7 @@ const ROLE_LABELS = {
   manager: "Menejerlar",
 };
 
+// ------------------- YORDAMCHI FUNKSIYALAR -------------------
 function formatSum(n) {
   return (Number(n) || 0).toLocaleString("ru-RU") + " so'm";
 }
@@ -101,8 +120,7 @@ function normalizeCarOption(raw) {
   return { id, label: String(label) };
 }
 
-// Statistika kartasi — barcha ranglar useColorModeValue orqali,
-// shu sabab dark/light rejim o'zgarganda avtomatik moslashadi
+// ------------------- STAT CARD KOMPONENTI -------------------
 function StatCard({ icon: IconCmp, label, value, suffix, accent = "gray" }) {
   const cardBg = useColorModeValue("white", "gray.800");
   const cardBorder = useColorModeValue("gray.200", "gray.700");
@@ -153,7 +171,6 @@ function StatCard({ icon: IconCmp, label, value, suffix, accent = "gray" }) {
   );
 }
 
-// Yillik jami ko'rsatkichlar — tanlangan mashina + yoqilg'i turi bo'yicha
 function MiniStat({ label, value, labelColor, valueColor }) {
   return (
     <Box>
@@ -173,9 +190,7 @@ function MiniStat({ label, value, labelColor, valueColor }) {
 }
 
 function Dashboard() {
-  const toast = useToast();
-
-  // Dark/Light rejimga mos ranglar
+  // Chakra UI ranglari
   const pageBg = useColorModeValue("gray.50", "gray.900");
   const headingColor = useColorModeValue("gray.800", "white");
   const subTextColor = useColorModeValue("gray.500", "gray.400");
@@ -196,6 +211,10 @@ function Dashboard() {
   const fuelPillBg = useColorModeValue("teal.50", "teal.900");
   const fuelPillColor = useColorModeValue("teal.600", "teal.300");
   const statBoxBg = useColorModeValue("gray.50", "gray.900");
+  const tableBg = useColorModeValue("white", "gray.800");
+  const tableHoverBg = useColorModeValue("gray.50", "gray.700");
+  const borderColor = useColorModeValue("gray.200", "gray.700");
+  const fuelHeaderBg = useColorModeValue("gray.50", "gray.900");
 
   const tooltipContentStyle = {
     borderRadius: "10px",
@@ -207,6 +226,7 @@ function Dashboard() {
 
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const currentMonthNumber = useMemo(() => new Date().getMonth() + 1, []);
 
   // --- 0) Umumiy xodimlar va mashinalar soni ---
   const [counts, setCounts] = useState({ roles: [], totalCars: 0 });
@@ -215,7 +235,6 @@ function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     setCountsLoading(true);
-
     apiStatistika
       .AllEmployeesAndCarsCounts()
       .then((response) => {
@@ -227,21 +246,15 @@ function Dashboard() {
       })
       .catch((err) => {
         if (cancelled) return;
-        toast({
-          title: "Xodimlar sonini yuklab bo'lmadi",
-          description: err.message,
-          status: "error",
-          duration: 4000,
-        });
+        toastService.error(`Xodimlar sonini yuklab bo'lmadi: ${err.message}`);
       })
       .finally(() => {
         if (!cancelled) setCountsLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [toast]);
+  }, []);
 
   // --- 1) Mashinalar ro'yxati (select uchun) ---
   const [cars, setCars] = useState([]);
@@ -251,7 +264,6 @@ function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     setCarsLoading(true);
-
     apiCars
       .All(1, 100, "", true, "", "", "name", "ASC")
       .then((response) => {
@@ -265,25 +277,21 @@ function Dashboard() {
       })
       .catch((err) => {
         if (cancelled) return;
-        toast({
-          title: "Mashinalar ro'yxatini yuklab bo'lmadi",
-          description: err.message,
-          status: "error",
-          duration: 4000,
-        });
+        toastService.error(
+          `Mashinalar ro'yxatini yuklab bo'lmadi: ${err.message}`,
+        );
         setCars([]);
       })
       .finally(() => {
         if (!cancelled) setCarsLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [toast]);
+  }, []);
 
   // --- 2) Tanlangan mashina uchun yillik statistika ---
-  const [yearlyCar, setYearlyCar] = useState(null); // { car, fuels: [...] }
+  const [yearlyCar, setYearlyCar] = useState(null);
   const [yearlyLoading, setYearlyLoading] = useState(false);
   const [selectedFuelId, setSelectedFuelId] = useState("");
 
@@ -293,10 +301,8 @@ function Dashboard() {
       setSelectedFuelId("");
       return;
     }
-
     let cancelled = false;
     setYearlyLoading(true);
-
     apiStatistika
       .YearlyStatistics(currentYear, { car_id: selectedCarId })
       .then((response) => {
@@ -304,7 +310,6 @@ function Dashboard() {
         const carsArr = pick(response, ["cars"], []);
         const carEntry = Array.isArray(carsArr) ? carsArr[0] : null;
         setYearlyCar(carEntry || null);
-
         const fuels = pick(carEntry, ["fuels"], []);
         setSelectedFuelId((prev) => {
           if (prev && fuels.some((f) => f.fuel_id === prev)) return prev;
@@ -313,22 +318,18 @@ function Dashboard() {
       })
       .catch((err) => {
         if (cancelled) return;
-        toast({
-          title: "Yillik statistikani yuklab bo'lmadi",
-          description: err.message,
-          status: "error",
-          duration: 4000,
-        });
+        toastService.error(
+          `Yillik statistikani yuklab bo'lmadi: ${err.message}`,
+        );
         setYearlyCar(null);
       })
       .finally(() => {
         if (!cancelled) setYearlyLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [selectedCarId, currentYear, toast]);
+  }, [selectedCarId, currentYear]);
 
   const fuels = yearlyCar?.fuels || [];
   const selectedFuel =
@@ -352,6 +353,124 @@ function Dashboard() {
 
   const yearlyTotal = selectedFuel?.yearly_total || null;
   const fuelUnit = selectedFuel?.fuel_unit || "";
+
+  // --- 3) Tashkilot bo'yicha oylik hisobot ---
+  const [orgReportData, setOrgReportData] = useState([]);
+  const [orgReportLoading, setOrgReportLoading] = useState(false);
+  const [orgReportPage, setOrgReportPage] = useState(1);
+  const [orgReportLimit, setOrgReportLimit] = useState(10);
+  const [orgReportTotal, setOrgReportTotal] = useState(0);
+  const [orgReportYear, setOrgReportYear] = useState(currentYear);
+  const [orgReportMonth, setOrgReportMonth] = useState(currentMonthNumber);
+
+  const fetchOrgReport = async () => {
+    if (!orgReportYear || !orgReportMonth) return;
+    setOrgReportLoading(true);
+    try {
+      const params = {
+        year: orgReportYear,
+        month: orgReportMonth,
+        page: orgReportPage,
+        limit: orgReportLimit,
+      };
+      const response = await apiStatistika.OrganizationMonthlyReport(params);
+
+      const items = pick(response, ["data"], []);
+      const total = pick(response, ["total"], 0);
+
+      const formatted = (Array.isArray(items) ? items : []).map((item) => {
+        const car = item.car || {};
+        const driver = car.driver || {};
+        const responsible = car.responsible_employee || {};
+        const fuelsArr = Array.isArray(item.fuels) ? item.fuels : [];
+        return {
+          car_name:
+            `${car.name || "Nomaʼlum"} ${car.plate_number || ""}`.trim(),
+          driver_name: driver.full_name || "-",
+          responsible_name: responsible.full_name || "-",
+          total_mileage: Number(item.total_mileage) || 0,
+          fuels: fuelsArr,
+        };
+      });
+
+      setOrgReportData(formatted);
+      setOrgReportTotal(total);
+    } catch (err) {
+      toastService.error(`Hisobotni yuklab bo'lmadi: ${err.message}`);
+      setOrgReportData([]);
+      setOrgReportTotal(0);
+    } finally {
+      setOrgReportLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrgReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgReportPage, orgReportLimit, orgReportYear, orgReportMonth]);
+
+  const handleExportExcel = async () => {
+    if (!orgReportYear || !orgReportMonth) return;
+    try {
+      const response = await apiStatistika.OrganizationMonthlyReportExcel({
+        year: orgReportYear,
+        month: orgReportMonth,
+      });
+
+      let filename = `tashkilot-oylik-hisobot-${orgReportYear}-${String(
+        orgReportMonth,
+      ).padStart(2, "0")}.xlsx`;
+
+      const disposition = response.headers?.["content-disposition"];
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toastService.success("Excel fayl yuklandi");
+    } catch (err) {
+      toastService.error(`Excel export qilib bo'lmadi: ${err.message}`);
+    }
+  };
+
+  const totalPages = Math.ceil(orgReportTotal / orgReportLimit) || 1;
+
+  // Jadval ustunlari
+  const fuelColumns = useMemo(() => {
+    const map = new Map();
+    orgReportData.forEach((row) => {
+      (row.fuels || []).forEach((f) => {
+        if (!map.has(f.fuel_id)) {
+          map.set(f.fuel_id, {
+            fuel_id: f.fuel_id,
+            fuel_name: f.fuel_name,
+            fuel_unit: f.fuel_unit,
+          });
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [orgReportData]);
+
+  function getRowFuel(row, fuelId) {
+    return (row.fuels || []).find((f) => f.fuel_id === fuelId) || null;
+  }
+
+  function rowTotalSum(row) {
+    return (row.fuels || []).reduce(
+      (acc, f) => acc + (Number(f.consumed_sum) || 0),
+      0,
+    );
+  }
 
   return (
     <Box p={{ base: 4, md: 6 }} bg={pageBg} minH="100vh">
@@ -387,7 +506,7 @@ function Dashboard() {
         </Badge>
       </Flex>
 
-      {/* XODIMLAR VA MASHINALAR SONI */}
+      {/* ============ 1) XODIMLAR VA MASHINALAR SONI (ENG TEPA) ============ */}
       <SimpleGrid
         columns={{
           base: 1,
@@ -422,14 +541,339 @@ function Dashboard() {
         )}
       </SimpleGrid>
 
-      {/* YILLIK XARAJAT VA YOQILG'I SARFI DINAMIKASI — mashina + yoqilg'i turi bo'yicha real ma'lumot */}
+      {/* ============ 2) TASHKILOT BO'YICHA OYLIK HISOBOT (JADVAL) ============ */}
       <Card
         bg={cardBg}
         border="1px solid"
         borderColor={cardBorder}
         borderRadius="2xl"
         overflow="hidden"
-        mt={5}
+        mb={5}
+      >
+        <CardHeader>
+          <Flex
+            direction={{ base: "column", md: "row" }}
+            align={{ base: "stretch", md: "center" }}
+            gap={4}
+          >
+            <Heading size="sm" color={headingColor}>
+              Tashkilot bo'yicha oylik hisobot
+            </Heading>
+            <Spacer />
+            <HStack spacing={3} wrap="wrap">
+              <HStack spacing={1}>
+                <Text fontSize="sm" color={subTextColor}>
+                  Yil:
+                </Text>
+                <Select
+                  value={orgReportYear}
+                  onChange={(e) => setOrgReportYear(Number(e.target.value))}
+                  size="sm"
+                  w="100px"
+                  bg={selectBg}
+                  borderColor={selectBorder}
+                  color={headingColor}
+                >
+                  {Array.from({ length: 5 }, (_, i) => currentYear - i).map(
+                    (y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ),
+                  )}
+                </Select>
+              </HStack>
+
+              <HStack spacing={1}>
+                <Text fontSize="sm" color={subTextColor}>
+                  Oy:
+                </Text>
+                <Select
+                  value={orgReportMonth}
+                  onChange={(e) => setOrgReportMonth(Number(e.target.value))}
+                  size="sm"
+                  w="120px"
+                  bg={selectBg}
+                  borderColor={selectBorder}
+                  color={headingColor}
+                  fontWeight="medium"
+                >
+                  {MONTH_LABELS.map((label, idx) => (
+                    <option key={idx + 1} value={idx + 1}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              </HStack>
+
+              <Button
+                size="sm"
+                colorScheme="green"
+                variant="outline"
+                onClick={handleExportExcel}
+                leftIcon={<Download size={16} />}
+              >
+                Excel yuklash
+              </Button>
+            </HStack>
+          </Flex>
+        </CardHeader>
+
+        <CardBody pt={0}>
+          <TableContainer
+            overflowX="auto"
+            css={{
+              "&::-webkit-scrollbar": { display: "none" },
+              scrollbarWidth: "none",
+            }}
+          >
+            <Table variant="simple" size="sm" bg={tableBg}>
+              <Thead>
+                <Tr>
+                  <Th
+                    rowSpan={2}
+                    color={subTextColor}
+                    borderColor={borderColor}
+                    verticalAlign="bottom"
+                  >
+                    Mashina
+                  </Th>
+                  <Th
+                    rowSpan={2}
+                    color={subTextColor}
+                    borderColor={borderColor}
+                    verticalAlign="bottom"
+                  >
+                    Haydovchi
+                  </Th>
+                  <Th
+                    rowSpan={2}
+                    color={subTextColor}
+                    borderColor={borderColor}
+                    verticalAlign="bottom"
+                  >
+                    Mas'ul shaxs
+                  </Th>
+                  <Th
+                    rowSpan={2}
+                    color={subTextColor}
+                    borderColor={borderColor}
+                    verticalAlign="bottom"
+                  >
+                    Masofa (km)
+                  </Th>
+                  {fuelColumns.map((f) => (
+                    <Th
+                      key={f.fuel_id}
+                      colSpan={4}
+                      textAlign="center"
+                      color={headingColor}
+                      borderColor={borderColor}
+                      bg={fuelHeaderBg}
+                    >
+                      {f.fuel_name}
+                    </Th>
+                  ))}
+                  <Th
+                    rowSpan={2}
+                    color={subTextColor}
+                    borderColor={borderColor}
+                    verticalAlign="bottom"
+                  >
+                    Jami xarajat
+                  </Th>
+                </Tr>
+                <Tr>
+                  {fuelColumns.map((f) => (
+                    <>
+                      <Th
+                        key={`${f.fuel_id}-start`}
+                        color={subTextColor}
+                        borderColor={borderColor}
+                        fontSize="10px"
+                      >
+                        Boshi ({f.fuel_unit})
+                      </Th>
+                      <Th
+                        key={`${f.fuel_id}-consumed`}
+                        color={subTextColor}
+                        borderColor={borderColor}
+                        fontSize="10px"
+                      >
+                        Sarf ({f.fuel_unit})
+                      </Th>
+                      <Th
+                        key={`${f.fuel_id}-sum`}
+                        color={subTextColor}
+                        borderColor={borderColor}
+                        fontSize="10px"
+                      >
+                        Summa
+                      </Th>
+                      <Th
+                        key={`${f.fuel_id}-end`}
+                        color={subTextColor}
+                        borderColor={borderColor}
+                        fontSize="10px"
+                      >
+                        Qoldiqi ({f.fuel_unit})
+                      </Th>
+                    </>
+                  ))}
+                </Tr>
+              </Thead>
+              <Tbody>
+                {orgReportLoading ? (
+                  [...Array(orgReportLimit)].map((_, i) => (
+                    <Tr key={i}>
+                      <Td
+                        colSpan={5 + fuelColumns.length * 4}
+                        borderColor={borderColor}
+                      >
+                        <Skeleton h="20px" w="full" />
+                      </Td>
+                    </Tr>
+                  ))
+                ) : orgReportData.length === 0 ? (
+                  <Tr>
+                    <Td
+                      colSpan={5 + fuelColumns.length * 4}
+                      textAlign="center"
+                      color={emptyTextColor}
+                      py={8}
+                    >
+                      Ma'lumot topilmadi
+                    </Td>
+                  </Tr>
+                ) : (
+                  orgReportData.map((row, idx) => (
+                    <Tr key={idx} _hover={{ bg: tableHoverBg }}>
+                      <Td borderColor={borderColor} color={headingColor}>
+                        {row.car_name}
+                      </Td>
+                      <Td borderColor={borderColor} color={headingColor}>
+                        {row.driver_name}
+                      </Td>
+                      <Td borderColor={borderColor} color={headingColor}>
+                        {row.responsible_name}
+                      </Td>
+                      <Td borderColor={borderColor} color={headingColor}>
+                        {formatNumberSimple(row.total_mileage)} km
+                      </Td>
+                      {fuelColumns.map((f) => {
+                        const rf = getRowFuel(row, f.fuel_id);
+                        return (
+                          <>
+                            <Td
+                              key={`${f.fuel_id}-start`}
+                              borderColor={borderColor}
+                              color={headingColor}
+                            >
+                              {rf ? formatNumberSimple(rf.start_balance) : "-"}
+                            </Td>
+                            <Td
+                              key={`${f.fuel_id}-consumed`}
+                              borderColor={borderColor}
+                              color={headingColor}
+                            >
+                              {rf
+                                ? formatNumberSimple(rf.consumed_amount)
+                                : "-"}
+                            </Td>
+                            <Td
+                              key={`${f.fuel_id}-sum`}
+                              borderColor={borderColor}
+                              color={headingColor}
+                            >
+                              {rf ? formatSum(rf.consumed_sum) : "-"}
+                            </Td>
+                            <Td
+                              key={`${f.fuel_id}-end`}
+                              borderColor={borderColor}
+                              color={headingColor}
+                            >
+                              {rf ? formatNumberSimple(rf.end_balance) : "-"}
+                            </Td>
+                          </>
+                        );
+                      })}
+                      <Td
+                        borderColor={borderColor}
+                        color={headingColor}
+                        fontWeight="semibold"
+                      >
+                        {formatSum(rowTotalSum(row))}
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </Tbody>
+            </Table>
+          </TableContainer>
+
+          {!orgReportLoading && orgReportTotal > 0 && (
+            <Flex justify="space-between" align="center" mt={4}>
+              <Text color={subTextColor} fontSize="sm">
+                Jami: {formatNumberSimple(orgReportTotal)} ta
+              </Text>
+              <HStack spacing={1}>
+                <IconButton
+                  size="sm"
+                  icon={<ChevronLeft size={18} />}
+                  onClick={() => setOrgReportPage((p) => Math.max(p - 1, 1))}
+                  isDisabled={orgReportPage === 1}
+                  variant="outline"
+                  borderColor={selectBorder}
+                  color={headingColor}
+                  aria-label="Oldingi sahifa"
+                />
+                <Text fontSize="sm" color={headingColor} px={2}>
+                  {orgReportPage} / {totalPages}
+                </Text>
+                <IconButton
+                  size="sm"
+                  icon={<ChevronRight size={18} />}
+                  onClick={() =>
+                    setOrgReportPage((p) => Math.min(p + 1, totalPages))
+                  }
+                  isDisabled={orgReportPage === totalPages}
+                  variant="outline"
+                  borderColor={selectBorder}
+                  color={headingColor}
+                  aria-label="Keyingi sahifa"
+                />
+                <Select
+                  size="sm"
+                  w="80px"
+                  value={orgReportLimit}
+                  onChange={(e) => {
+                    setOrgReportLimit(Number(e.target.value));
+                    setOrgReportPage(1);
+                  }}
+                  bg={selectBg}
+                  borderColor={selectBorder}
+                  color={headingColor}
+                >
+                  {[5, 10, 20, 50].map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              </HStack>
+            </Flex>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* ============ 3) YILLIK XARAJAT VA YOQILG'I SARFI DINAMIKASI ============ */}
+      <Card
+        bg={cardBg}
+        border="1px solid"
+        borderColor={cardBorder}
+        borderRadius="2xl"
+        overflow="hidden"
+        mb={5}
       >
         <CardHeader pb={0}>
           <Flex
@@ -448,7 +892,6 @@ function Dashboard() {
             </Box>
 
             <HStack spacing={2.5} wrap="wrap">
-              {/* Mashina select */}
               {carsLoading ? (
                 <Skeleton h="38px" w="220px" borderRadius="lg" />
               ) : (
@@ -492,7 +935,6 @@ function Dashboard() {
                 </HStack>
               )}
 
-              {/* Yoqilg'i turi select — faqat 2+ tur bo'lsa ko'rsatiladi */}
               {!yearlyLoading && fuels.length > 1 && (
                 <HStack
                   spacing={0}
@@ -574,7 +1016,6 @@ function Dashboard() {
             </Center>
           ) : (
             <>
-              {/* Yillik jami ko'rsatkichlar */}
               {yearlyTotal && (
                 <SimpleGrid
                   columns={{ base: 2, sm: 4 }}

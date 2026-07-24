@@ -12,7 +12,6 @@ import {
   Table,
   Thead,
   Tbody,
-  Tfoot,
   Tr,
   Th,
   Td,
@@ -32,7 +31,6 @@ import {
   NumberInputField,
   Heading,
   Tooltip,
-  Divider,
 } from "@chakra-ui/react";
 import {
   Plus,
@@ -43,9 +41,11 @@ import {
   Trash2,
   AlertTriangle,
   Car,
-  Gauge,
   LayoutGrid,
   List,
+  Download,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { apiCost } from "../../Services/api/apiCost";
 import { apiFuel } from "../../Services/api/Fuels";
@@ -245,6 +245,10 @@ function normalizeTotal(raw, index) {
       Number(pick(raw, ["total_fuel_expence", "total_fuel_expense"], 0)) || 0,
     totalMileage: Number(pick(raw, ["total_mileage"], 0)) || 0,
     totalSum: Number(pick(raw, ["total_price_sum"], 0)) || 0,
+    currentBalance:
+      raw && raw.current_balance !== undefined && raw.current_balance !== null
+        ? Number(raw.current_balance)
+        : null,
     colorScheme: getFuelColorScheme(fuelName, index),
   };
 }
@@ -293,6 +297,8 @@ function normalizeCar(raw) {
   return {
     id,
     label: String(label),
+    name: name ? String(name) : String(label),
+    plate: plate ? String(plate) : null,
     odometer:
       odometer !== null && odometer !== undefined ? Number(odometer) : null,
   };
@@ -548,6 +554,7 @@ function FilterBar({
   fuelTypes,
   fuelTypesLoading,
   leading,
+  trailing,
 }) {
   return (
     <Flex direction="row" gap={3} wrap="wrap" align="center">
@@ -586,6 +593,7 @@ function FilterBar({
         size="sm"
         {...inputStyles}
       />
+      {trailing}
     </Flex>
   );
 }
@@ -640,6 +648,86 @@ function CarPickerSelect({ cars, selectedCarId, onCarChange, carsLoading }) {
   );
 }
 
+// ---------- PlateNumber ----------
+function parsePlate(raw) {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+  const match = str.match(/^(\d{2})\s*[-\s]?\s*(.+)$/);
+  if (match) {
+    return { region: match[1], rest: match[2].trim().toUpperCase() };
+  }
+  return { region: null, rest: str.toUpperCase() };
+}
+
+function PlateNumber({ plate, size = "sm" }) {
+  const parsed = parsePlate(plate);
+  const isSmall = size === "sm";
+  if (!parsed) {
+    return (
+      <Text fontSize="xs" color="textSecondary">
+        Raqam kiritilmagan
+      </Text>
+    );
+  }
+  return (
+    <HStack
+      spacing={0}
+      bg="white"
+      borderRadius="6px"
+      borderWidth="1.5px"
+      borderColor="gray.900"
+      overflow="hidden"
+      boxShadow="sm"
+      h={isSmall ? "24px" : "30px"}
+      w="fit-content"
+      flexShrink={0}
+    >
+      {parsed.region && (
+        <Center
+          px={2}
+          h="100%"
+          borderRightWidth="2px"
+          borderRightColor="gray.900"
+        >
+          <Text
+            fontSize={isSmall ? "11px" : "13px"}
+            fontWeight="800"
+            color="gray.900"
+            lineHeight="1"
+          >
+            {parsed.region}
+          </Text>
+        </Center>
+      )}
+      <Center px={2} h="100%">
+        <Text
+          fontSize={isSmall ? "11px" : "13px"}
+          fontWeight="800"
+          color="gray.900"
+          letterSpacing="0.5px"
+          lineHeight="1"
+          whiteSpace="nowrap"
+        >
+          {parsed.rest}
+        </Text>
+      </Center>
+      <Flex
+        direction="column"
+        align="center"
+        justify="center"
+        bg="blue.600"
+        px={1}
+        h="100%"
+      >
+        <Text fontSize="6px" fontWeight="800" color="white" lineHeight="1.1">
+          UZ
+        </Text>
+      </Flex>
+    </HStack>
+  );
+}
+
 // ---------- CarCard & CarCardsGrid ----------
 function CarCard({ car, isSelected, onClick }) {
   const selectedBg = useColorModeValue(
@@ -658,13 +746,12 @@ function CarCard({ car, isSelected, onClick }) {
       textAlign="left"
       position="relative"
       bg={isSelected ? selectedBg : "surface"}
-      borderWidth="1.5px"
-      borderColor={isSelected ? "primary.500" : "border"}
-      borderRadius="xl"
-      px={5}
-      py={5}
-      w="255px"
-      flex="0 0 255px"
+      borderWidth="0"
+      borderRadius="lg"
+      px={3.5}
+      py={2.5}
+      w="196px"
+      flex="0 0 196px"
       transition="all 0.18s ease"
       boxShadow={isSelected ? ringShadow : "sm"}
       _hover={{
@@ -677,21 +764,21 @@ function CarCard({ car, isSelected, onClick }) {
       {isSelected && (
         <Center
           position="absolute"
-          top="-8px"
-          right="-8px"
-          boxSize="22px"
+          top="-7px"
+          right="-7px"
+          boxSize="18px"
           bg="primary.500"
           color="white"
           borderRadius="full"
           boxShadow="0 2px 6px rgba(0,0,0,0.25)"
         >
-          <Check size={13} strokeWidth={3} />
+          <Check size={11} strokeWidth={3} />
         </Center>
       )}
-      <HStack spacing={3.5} align="center">
+      <HStack spacing={2.5} align="center">
         <Center
-          boxSize="46px"
-          borderRadius="lg"
+          boxSize="30px"
+          borderRadius="md"
           bg={isSelected ? "primary.500" : "bg"}
           color={isSelected ? "white" : "textSecondary"}
           flexShrink={0}
@@ -699,34 +786,21 @@ function CarCard({ car, isSelected, onClick }) {
           borderColor="border"
           transition="all 0.18s ease"
         >
-          <Car size={21} />
+          <Car size={15} />
         </Center>
         <Text
           fontWeight="bold"
-          fontSize="md"
+          fontSize="sm"
           color="text"
           noOfLines={1}
-          title={car.label}
+          title={car.name}
         >
-          {car.label}
+          {car.name}
         </Text>
       </HStack>
-      <Divider my={3.5} borderColor="border" />
-      <HStack justify="space-between" align="center">
-        <Badge
-          variant="subtle"
-          colorScheme={isSelected ? "primary" : "gray"}
-          borderRadius="md"
-          px={2.5}
-          py={1}
-          fontSize="12px"
-          display="inline-flex"
-          alignItems="center"
-          gap={1.5}
-        >
-          <Gauge size={13} />
-          {car.odometer !== null ? `${formatNumber(car.odometer)} km` : "—"}
-        </Badge>
+      <Box mt={2.5} />
+      <HStack justify="flex-start" align="center">
+        <PlateNumber plate={car.plate} />
       </HStack>
     </Box>
   );
@@ -737,7 +811,7 @@ function CarCardsGrid({ cars, selectedCarId, onCarChange, carsLoading }) {
     return (
       <Flex gap={3} wrap="wrap">
         {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} h="118px" w="255px" borderRadius="xl" />
+          <Skeleton key={i} h="80px" w="196px" borderRadius="lg" />
         ))}
       </Flex>
     );
@@ -774,6 +848,8 @@ function CarSelector({
   selectedCarId,
   onCarChange,
   showCards,
+  onExportExcel,
+  isExporting,
 }) {
   return (
     <Box mb={6} w="100%">
@@ -802,6 +878,20 @@ function CarSelector({
                 carsLoading={carsLoading}
               />
             ) : null
+          }
+          trailing={
+            <Button
+              leftIcon={<Download size={14} />}
+              size="sm"
+              variant="outline"
+              colorScheme="green"
+              borderRadius="md"
+              onClick={onExportExcel}
+              isLoading={isExporting}
+              isDisabled={!selectedCarId}
+            >
+              Excel yuklash
+            </Button>
           }
         />
       </Box>
@@ -1321,61 +1411,144 @@ function DataRow({
   );
 }
 
-function TotalsFooterRow({ total }) {
-  return (
-    <Tr bg="primaryBg" borderTopWidth="2px" borderColor="border">
-      <Td borderColor="border" py={3}>
-        <Badge
-          colorScheme="primary"
-          variant="solid"
-          borderRadius="md"
-          px={2}
-          py={0.5}
-          fontSize="10px"
-        >
-          Jami
-        </Badge>
-      </Td>
-      <Td borderColor="border">
-        <Badge
-          colorScheme={total.colorScheme}
-          borderRadius="md"
-          px={2.5}
-          py={1}
-          fontWeight="bold"
-        >
-          {total.fuelName}
-        </Badge>
-      </Td>
-      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
-        {formatNumber(total.totalReceived)} {total.fuelUnit}
-      </Td>
-      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
-        {formatNumber(total.totalExpense)} {total.fuelUnit}
-      </Td>
-      <Td borderColor="border" />
-      <Td borderColor="border" />
-      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
-        {formatNumber(total.totalMileage)} km
-      </Td>
-      <Td isNumeric color="text" fontWeight="bold" borderColor="border">
-        {formatNumber(total.totalSum)} so'm
-      </Td>
-      <Td borderColor="border" />
-      <Td borderColor="border" />
-      <Td borderColor="border" />
-    </Tr>
-  );
-}
-
-function TotalsFooter({ totals }) {
+// ---------- Jami statistika (JADVAL ko'rinishida) ----------
+function TotalsSummaryTable({ totals }) {
   if (!totals || totals.length === 0) return null;
+
   return (
-    <Tfoot position="sticky" bottom={0} zIndex={1}>
-      {totals.map((t) => (
-        <TotalsFooterRow key={t.fuelId} total={t} />
-      ))}
-    </Tfoot>
+    <Box
+      bg="surface"
+      borderRadius="2xl"
+      borderWidth="1px"
+      borderColor="border"
+      boxShadow="md"
+      overflow="hidden"
+      w="100%"
+    >
+      <Box px={5} pt={4} pb={2}>
+        <Text
+          fontSize="xs"
+          fontWeight="bold"
+          color="textSecondary"
+          textTransform="uppercase"
+          letterSpacing="0.5px"
+        >
+          Jami statistika
+        </Text>
+      </Box>
+      <TableContainer w="100%">
+        <Table variant="simple" size="sm" w="100%">
+          <Thead bg="bg">
+            <Tr>
+              <Th color="textSecondary" borderColor="border">
+                Yoqilg'i
+              </Th>
+              <Th color="textSecondary" borderColor="border" isNumeric>
+                Olingan
+              </Th>
+              <Th color="textSecondary" borderColor="border" isNumeric>
+                Sarflangan
+              </Th>
+              <Th color="textSecondary" borderColor="border" isNumeric>
+                Yurgan
+              </Th>
+              <Th color="textSecondary" borderColor="border" isNumeric>
+                Summa
+              </Th>
+              <Th color="textSecondary" borderColor="border" isNumeric>
+                Qoldiq
+              </Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {totals.map((total) => {
+              const hasBalance =
+                total.currentBalance !== null &&
+                !Number.isNaN(total.currentBalance);
+              const balancePositive = hasBalance && total.currentBalance >= 0;
+
+              return (
+                <Tr key={total.fuelId} _hover={{ bg: "primaryBg" }}>
+                  <Td
+                    borderColor="border"
+                    borderLeftWidth="4px"
+                    borderLeftColor={`${total.colorScheme}.500`}
+                  >
+                    <Badge
+                      colorScheme={total.colorScheme}
+                      borderRadius="md"
+                      px={2.5}
+                      py={1}
+                      fontWeight="bold"
+                    >
+                      {total.fuelName}
+                    </Badge>
+                  </Td>
+                  <Td
+                    isNumeric
+                    borderColor="border"
+                    fontWeight="semibold"
+                    color="text"
+                  >
+                    {formatNumber(total.totalReceived)} {total.fuelUnit}
+                  </Td>
+                  <Td
+                    isNumeric
+                    borderColor="border"
+                    fontWeight="semibold"
+                    color="text"
+                  >
+                    {formatNumber(total.totalExpense)} {total.fuelUnit}
+                  </Td>
+                  <Td
+                    isNumeric
+                    borderColor="border"
+                    fontWeight="semibold"
+                    color="text"
+                  >
+                    {formatNumber(total.totalMileage)} km
+                  </Td>
+                  <Td
+                    isNumeric
+                    borderColor="border"
+                    fontWeight="semibold"
+                    color="text"
+                  >
+                    {formatNumber(total.totalSum)} so'm
+                  </Td>
+                  <Td isNumeric borderColor="border">
+                    {hasBalance ? (
+                      <HStack
+                        spacing={1}
+                        justify="flex-end"
+                        bg={balancePositive ? "green.500" : "red.500"}
+                        borderRadius="md"
+                        px={2}
+                        py={1}
+                        display="inline-flex"
+                      >
+                        {balancePositive ? (
+                          <TrendingUp size={12} color="white" />
+                        ) : (
+                          <TrendingDown size={12} color="white" />
+                        )}
+                        <Text fontSize="xs" fontWeight="bold" color="white">
+                          {formatNumber(total.currentBalance)} {total.fuelUnit}
+                        </Text>
+                      </HStack>
+                    ) : (
+                      <Text color="textSecondary" fontSize="sm">
+                        —
+                      </Text>
+                    )}
+                  </Td>
+                </Tr>
+              );
+            })}
+          </Tbody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 }
 
@@ -1400,7 +1573,6 @@ function ExpenseTable({
   isSavingEdit,
   onDelete,
   selectedCarId,
-  totals,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1509,7 +1681,6 @@ function ExpenseTable({
             selectedCarId={selectedCarId}
           />
         </Tbody>
-        {!loading && <TotalsFooter totals={totals} />}
       </Table>
     </TableContainer>
   );
@@ -1950,6 +2121,58 @@ function CostPage() {
     }
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (!selectedCarId) {
+      toastService.error("Avval mashinani tanlang");
+      return;
+    }
+
+    // filters.date_from dan yil va oyni olamiz (backend "year" va "month" so'raydi)
+    const refDate = new Date(filters.date_from || getTodayDate());
+    const year = refDate.getFullYear();
+    const month = refDate.getMonth() + 1;
+
+    setIsExporting(true);
+    try {
+      const response = await apiCost.CarMonthlyReportExcel({
+        car_id: selectedCarId,
+        fuel_id: filters.fuel_id || undefined,
+        year,
+        month,
+      });
+
+      const car = cars.find((c) => c.id === selectedCarId);
+      const safeName = (car?.label || "mashina").replace(/[^\w\- ]+/g, "");
+      let fileName = `xarajatlar_${safeName}_${year}-${String(month).padStart(
+        2,
+        "0",
+      )}.xlsx`;
+
+      const disposition = response.headers?.["content-disposition"];
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) fileName = match[1];
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toastService.success("Excel fayli yuklab olindi");
+    } catch (err) {
+      toastService.error("Excelga eksport qilib bo'lmadi: " + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const noCarSelected = !selectedCarId;
 
   return (
@@ -2005,6 +2228,8 @@ function CostPage() {
         selectedCarId={selectedCarId}
         onCarChange={handleCarChange}
         showCards={showCards}
+        onExportExcel={handleExportExcel}
+        isExporting={isExporting}
       />
 
       <Box
@@ -2037,9 +2262,14 @@ function CostPage() {
           isSavingEdit={isSavingEdit}
           onDelete={askDelete}
           selectedCarId={selectedCarId}
-          totals={totals}
         />
       </Box>
+
+      {!loading && !noCarSelected && (
+        <Box mt={5}>
+          <TotalsSummaryTable totals={totals} />
+        </Box>
+      )}
 
       <DeleteConfirmDialog
         isOpen={deleteDialog.isOpen}
