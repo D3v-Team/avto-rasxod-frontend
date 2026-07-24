@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Card,
@@ -35,6 +35,7 @@ import {
   VStack,
   HStack,
   Switch,
+  ButtonGroup,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -45,12 +46,20 @@ import {
   Gauge,
   Fuel,
   Zap,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { apiCars } from "../../Services/api/Cars";
 import { apiEmployees } from "../../Services/api/Users";
 import { apiFuel } from "../../Services/api/Fuels";
 
 const ACCENT = "#3B82F6";
+
+// 🇺🇿 O'zbekiston avtomobil viloyat kodlari ro'yxati
+const VALID_REGION_CODES = [
+  "01", "10", "20", "25", "30", "35", "40", "50", "60", "70", "75", "80", "85", "90", "95"
+];
 
 // 🔋 Backend hozircha is_electric maydonini qaytarmaydi/saqlamaydi,
 // shu sababli buni frontendda localStorage orqali saqlab turamiz.
@@ -104,6 +113,9 @@ const initialNormState = {
   norm_per_100km: "",
 };
 
+// 📄 PAGINATION SOZLAMALARI
+const ITEMS_PER_PAGE = 10;
+
 export default function CarPage() {
   const [cars, setCars] = useState([]);
   const [drivers, setDrivers] = useState([]);
@@ -113,11 +125,22 @@ export default function CarPage() {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [search, setSearch] = useState("");
+  const [showDeleted, setShowDeleted] = useState(false); // 1. O'chirilganlarni boshqarish
   const [formData, setFormData] = useState(initialFormState);
+  
+  // 🚗 Raqam xususiy inputlari uchun state va ref-lar
+  const [plateRegion, setPlateRegion] = useState("");
+  const [plateMain, setPlateMain] = useState("");
+  const regionInputRef = useRef(null);
+  const mainInputRef = useRef(null);
+
   const [normFormData, setNormFormData] = useState(initialNormState);
   const [selectedCar, setSelectedCar] = useState(null);
   const [selectedCarId, setSelectedCarId] = useState(null);
   const [carToDelete, setCarToDelete] = useState(null);
+
+  // 📄 PAGINATION STATE
+  const [currentPage, setCurrentPage] = useState(1);
 
   const {
     isOpen: isFormOpen,
@@ -172,10 +195,11 @@ export default function CarPage() {
     }
   };
 
+  // 2. fetchCars - showDeleted qiymatini is_deleted sifatida uzatish
   const fetchCars = async () => {
     setLoading(true);
     try {
-      const res = await apiCars.All(1, 100, search);
+      const res = await apiCars.All(1, 100, search, undefined, showDeleted);
       const rawData = extractRecords(res);
       const electricMap = getElectricMap();
 
@@ -203,8 +227,6 @@ export default function CarPage() {
           responsibleName = car.responsible_employee;
         }
 
-        // Backend is_electric ni qaytarmasa ham, localStorage'da saqlangan
-        // qiymat bo'lsa o'shani ustuvor qilib olamiz.
         const localElectric = electricMap[car.id];
         const isElectric =
           localElectric !== undefined
@@ -228,7 +250,7 @@ export default function CarPage() {
               : car.responsible_employee_id || "",
 
           speedometer: Number(car.speedometer || 0),
-          is_electric: isElectric, // Elektromobil statusi (local + backend)
+          is_electric: isElectric,
           is_active:
             car.is_active !== undefined ? Boolean(car.is_active) : true,
         };
@@ -247,12 +269,46 @@ export default function CarPage() {
     fetchFuels();
   }, []);
 
+  // 3. useEffect dependency - showDeleted va search ga ulandi
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
       fetchCars();
     }, 400);
     return () => clearTimeout(delayDebounce);
-  }, [search]);
+  }, [search, showDeleted]);
+
+  // 📄 Qidiruv yoki filtr o'zgarganda 1-sahifaga qaytarish
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, showDeleted]);
+
+  // 📄 PAGINATION HISOBLASHLAR (mavjud logikaga tegmasdan, faqat ko'rsatish uchun)
+  const totalPages = Math.max(1, Math.ceil(cars.length / ITEMS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedCars = cars.slice(
+    (safeCurrentPage - 1) * ITEMS_PER_PAGE,
+    safeCurrentPage * ITEMS_PER_PAGE,
+  );
+
+  const goToPage = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let start = Math.max(1, safeCurrentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    start = Math.max(1, end - maxVisible + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  };
+
+  // 8. Restore button uchun TODO
+  const handleRestore = async (id) => {
+    // TODO: Backend restore endpoint tayyor bo'lganda shu yerda ishlatiladi.
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -262,10 +318,21 @@ export default function CarPage() {
     }));
   };
 
+  // 🚗 Avto raqamining qismlarini jamlash
+  useEffect(() => {
+    const fullPlate = `${plateRegion}${plateMain}`.trim();
+    setFormData((prev) => ({ ...prev, plate_number: fullPlate }));
+  }, [plateRegion, plateMain]);
+
   const handleOpenCreate = () => {
     setSelectedCarId(null);
     setFormData(initialFormState);
+    setPlateRegion("");
+    setPlateMain("");
     onFormOpen();
+    setTimeout(() => {
+      regionInputRef.current?.focus();
+    }, 100);
   };
 
   const handleOpenEdit = (car) => {
@@ -279,13 +346,50 @@ export default function CarPage() {
       is_electric: Boolean(car.is_electric),
       is_active: car.is_active ?? true,
     });
+
+    const clean = (car.plate_number || "").replace(/\s+/g, "").toUpperCase();
+    const reg = clean.slice(0, 2);
+    const main = clean.slice(2);
+    setPlateRegion(reg);
+    setPlateMain(main);
+
     onFormOpen();
   };
+
+  // 🚗 Viloyat kodi kiritilgandagi logika
+  const handleRegionChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+    setPlateRegion(val);
+
+    if (val.length === 2) {
+      mainInputRef.current?.focus();
+    }
+  };
+
+  // 🚗 Raqamning qolgan qismi kiritilgandagi va o'chirilayotgandagi logika
+  const handleMainChange = (e) => {
+    const val = e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    setPlateMain(val);
+  };
+
+  const handleMainKeyDown = (e) => {
+    if (e.key === "Backspace" && plateMain === "") {
+      regionInputRef.current?.focus();
+    }
+  };
+
+  const isRegionInvalid =
+    plateRegion.length === 2 && !VALID_REGION_CODES.includes(plateRegion);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name.trim() || !formData.plate_number.trim()) {
+    if (
+      !formData.name.trim() ||
+      !formData.plate_number.trim() ||
+      isRegionInvalid ||
+      plateRegion.length < 2
+    ) {
       return;
     }
 
@@ -304,12 +408,9 @@ export default function CarPage() {
     try {
       if (selectedCarId) {
         await apiCars.Update(selectedCarId, payload);
-        // Backend is_electric ni saqlamasa ham, frontendda holatni saqlaymiz
         setElectricStatus(selectedCarId, formData.is_electric);
       } else {
         const createRes = await apiCars.Create(payload);
-        // Yangi yaratilgan avtomobil id sini turli mumkin bo'lgan
-        // javob strukturalaridan topishga harakat qilamiz
         const newCarId =
           createRes?.data?.id ??
           createRes?.data?.data?.id ??
@@ -384,7 +485,6 @@ export default function CarPage() {
     }
   };
 
-  // 🔢 Davlat raqamini "20 | 200 DAV" ko'rinishida (raqam va harflar orasida bo'sh joy bilan) formatlaydi
   const formatPlateNumber = (plate) => {
     if (!plate) return { region: "20", main: "" };
     const clean = plate.replace(/\s+/g, "").toUpperCase();
@@ -416,7 +516,7 @@ export default function CarPage() {
         >
           <VStack align="start" spacing={1}>
             <Heading size="lg" color="text" fontWeight="600">
-              Avtomobillar
+              {showDeleted ? "O'chirilgan avtomobillar" : "Avtomobillar"}
             </Heading>
             <Text color="textSecondary" fontSize="sm">
               Tizimdagi barcha transport vositalari va ularning ko'rsatkichlari
@@ -438,28 +538,78 @@ export default function CarPage() {
           </Button>
         </Flex>
 
-        {/* SEARCH + COUNT ROW */}
+        {/* SEARCH + TOGGLE + COUNT ROW */}
         <Flex justify="space-between" align="center" gap={4} wrap="wrap" mb={5}>
-          <InputGroup maxW="320px">
-            <InputLeftElement pointerEvents="none">
-              <Search size={17} color="var(--chakra-colors-textSecondary)" />
-            </InputLeftElement>
-            <Input
-              placeholder="Qidirish..."
+          <HStack spacing={3} wrap="wrap" flex="1" maxW="600px">
+            <InputGroup maxW="320px">
+              <InputLeftElement pointerEvents="none">
+                <Search size={17} color="var(--chakra-colors-textSecondary)" />
+              </InputLeftElement>
+              <Input
+                placeholder="Qidirish..."
+                bg="surface"
+                border="1px solid"
+                borderColor="border"
+                color="text"
+                borderRadius="lg"
+                _hover={{ borderColor: ACCENT }}
+                _focus={{
+                  borderColor: ACCENT,
+                  boxShadow: `0 0 0 3px ${ACCENT}26`,
+                }}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </InputGroup>
+
+            {/* TOGGLE SWITCH: Faol / O'chirilgan */}
+            <ButtonGroup
+              isAttached
+              variant="outline"
               bg="surface"
+              p="3px"
+              borderRadius="xl"
               border="1px solid"
               borderColor="border"
-              color="text"
-              borderRadius="lg"
-              _hover={{ borderColor: ACCENT }}
-              _focus={{
-                borderColor: ACCENT,
-                boxShadow: `0 0 0 3px ${ACCENT}26`,
-              }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </InputGroup>
+            >
+              <Button
+                size="sm"
+                borderRadius="lg"
+                border="none"
+                bg={!showDeleted ? ACCENT : "transparent"}
+                color={!showDeleted ? "white" : "textSecondary"}
+                _hover={{
+                  bg: !showDeleted ? ACCENT : "blackAlpha.50",
+                  color: !showDeleted ? "white" : "text",
+                }}
+                fontWeight="600"
+                fontSize="xs"
+                px={4}
+                onClick={() => setShowDeleted(false)}
+              >
+                Faol
+              </Button>
+              <Button
+                size="sm"
+                borderRadius="lg"
+                border="none"
+                bg={showDeleted ? "red.500" : "transparent"}
+                color={showDeleted ? "white" : "textSecondary"}
+                _hover={{
+                  bg: showDeleted ? "red.600" : "blackAlpha.50",
+                  color: showDeleted ? "white" : "text",
+                }}
+                fontWeight="600"
+                fontSize="xs"
+                px={4}
+                onClick={() => setShowDeleted(true)}
+              >
+                O'chirilgan
+              </Button>
+            </ButtonGroup>
+          </HStack>
+
+          {/* COUNT BADGE */}
           <Badge
             fontSize="xs"
             px={3}
@@ -470,7 +620,7 @@ export default function CarPage() {
             border="1px solid"
             borderColor="border"
           >
-            Jami: {cars.length} ta
+            {showDeleted ? "O'chirilgan:" : "Jami:"} {cars.length} ta
           </Badge>
         </Flex>
 
@@ -573,7 +723,7 @@ export default function CarPage() {
                     </Tr>
                   </Thead>
                   <Tbody>
-                    {cars.map((car) => (
+                    {paginatedCars.map((car) => (
                       <Tr
                         key={car.id}
                         transition="all 0.2s ease"
@@ -582,7 +732,7 @@ export default function CarPage() {
                           transform: "translateY(-1px)",
                         }}
                       >
-                        {/* 1. Avtomobil Nomi va Jonli Icon */}
+                        {/* 1. Avtomobil Nomi */}
                         <Td borderColor="border" pl={6} py={4}>
                           <HStack spacing={3}>
                             <Center
@@ -618,7 +768,8 @@ export default function CarPage() {
                           </HStack>
                         </Td>
 
-                        <Td>
+                        {/* 2. Davlat raqami */}
+                        <Td borderColor="border">
                           <Flex
                             align="center"
                             bg="white"
@@ -630,7 +781,6 @@ export default function CarPage() {
                             w="fit-content"
                             userSelect="none"
                           >
-                            {/* 1. Viloyat kodi (is_electric bo'lsa YASHIL, aks holda OQ) */}
                             <Center
                               bg={car.is_electric ? "#70C837" : "white"}
                               px={2}
@@ -647,10 +797,8 @@ export default function CarPage() {
                               </Text>
                             </Center>
 
-                            {/* Tik ajratuvchi chiziq */}
                             <Box w="1.5px" bg="#000" alignSelf="stretch" />
 
-                            {/* 2. Asosiy Raqam qismi (raqam va harflar orasida bo'sh joy bilan) */}
                             <Center px={2.5} h="100%">
                               <Text
                                 fontWeight="800"
@@ -665,7 +813,6 @@ export default function CarPage() {
                               </Text>
                             </Center>
 
-                            {/* 3. Bayroqcha va UZ */}
                             <VStack
                               spacing={0}
                               align="center"
@@ -777,73 +924,95 @@ export default function CarPage() {
                           )}
                         </Td>
 
-                        {/* 7. Amallar */}
+                        {/* AMALLAR */}
                         <Td borderColor="border" pr={6}>
                           <Flex justify="center" align="center" gap={2}>
-                            <Tooltip
-                              label="Yoqilg'i normasini belgilash"
-                              hasArrow
-                            >
+                            {showDeleted ? (
                               <Button
                                 size="xs"
-                                variant="outline"
-                                borderColor={`${ACCENT}40`}
-                                color={ACCENT}
-                                _hover={{
-                                  bg: `${ACCENT}15`,
-                                  borderColor: ACCENT,
-                                }}
+                                leftIcon={<RotateCcw size={13} />}
+                                colorScheme="green"
+                                variant="light"
+                                bg="green.50"
+                                color="green.600"
+                                _hover={{ bg: "green.100" }}
                                 fontSize="11px"
                                 fontWeight="600"
                                 borderRadius="lg"
                                 px={3}
                                 h="28px"
-                                onClick={() => handleOpenNormModal(car)}
+                                onClick={() => handleRestore(car.id)}
                               >
-                                Norma
+                                Tiklash
                               </Button>
-                            </Tooltip>
+                            ) : (
+                              <>
+                                <Tooltip
+                                  label="Yoqilg'i normasini belgilash"
+                                  hasArrow
+                                >
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    borderColor={`${ACCENT}40`}
+                                    color={ACCENT}
+                                    _hover={{
+                                      bg: `${ACCENT}15`,
+                                      borderColor: ACCENT,
+                                    }}
+                                    fontSize="11px"
+                                    fontWeight="600"
+                                    borderRadius="lg"
+                                    px={3}
+                                    h="28px"
+                                    onClick={() => handleOpenNormModal(car)}
+                                  >
+                                    Norma
+                                  </Button>
+                                </Tooltip>
 
-                            <Tooltip label="Tahrirlash" hasArrow>
-                              <IconButton
-                                icon={<Pencil size={14} />}
-                                size="xs"
-                                w="28px"
-                                h="28px"
-                                variant="ghost"
-                                color="textSecondary"
-                                borderRadius="lg"
-                                border="1px solid"
-                                borderColor="transparent"
-                                _hover={{
-                                  bg: "blackAlpha.100",
-                                  color: "text",
-                                  borderColor: "border",
-                                }}
-                                aria-label="Tahrirlash"
-                                onClick={() => handleOpenEdit(car)}
-                              />
-                            </Tooltip>
+                                <Tooltip label="Tahrirlash" hasArrow>
+                                  <IconButton
+                                    icon={<Pencil size={14} />}
+                                    size="xs"
+                                    w="28px"
+                                    h="28px"
+                                    variant="ghost"
+                                    color="textSecondary"
+                                    borderRadius="lg"
+                                    border="1px solid"
+                                    borderColor="transparent"
+                                    _hover={{
+                                      bg: "blackAlpha.100",
+                                      color: "text",
+                                      borderColor: "border",
+                                    }}
+                                    aria-label="Tahrirlash"
+                                    onClick={() => handleOpenEdit(car)}
+                                  />
+                                </Tooltip>
 
-                            <Tooltip label="O'chirish" hasArrow>
-                              <IconButton
-                                icon={<Trash2 size={14} />}
-                                size="xs"
-                                w="28px"
-                                h="28px"
-                                variant="ghost"
-                                color="red.500"
-                                borderRadius="lg"
-                                border="1px solid"
-                                borderColor="transparent"
-                                _hover={{
-                                  bg: "red.50",
-                                  borderColor: "red.200",
-                                }}
-                                aria-label="O'chirish"
-                                onClick={() => handleOpenDelete(car)}
-                              />
-                            </Tooltip>
+                                <Tooltip label="O'chirish" hasArrow>
+                                  <IconButton
+                                    icon={<Trash2 size={14} />}
+                                    size="xs"
+                                    w="28px"
+                                    h="28px"
+                                    variant="ghost"
+                                    color="red.500"
+                                    borderRadius="lg"
+                                    border="1px solid"
+                                    borderColor="transparent"
+                                    _hover={{
+                                      bg: "red.50",
+                                      borderColor: "red.200",
+                                    }}
+                                    aria-label="O'chirish"
+                                    onClick={() => handleOpenDelete(car)}
+                                  />
+                                </Tooltip>
+                              </>
+                            )}
                           </Flex>
                         </Td>
                       </Tr>
@@ -851,6 +1020,76 @@ export default function CarPage() {
                   </Tbody>
                 </Table>
               </Box>
+            )}
+
+            {/* PAGINATION CONTROLS */}
+            {!loading && cars.length > 0 && (
+              <Flex
+                justify="space-between"
+                align="center"
+                px={6}
+                py={4}
+                borderTop="1px solid"
+                borderColor="border"
+                flexWrap="wrap"
+                gap={3}
+              >
+                <Text fontSize="xs" color="textSecondary">
+                  {(safeCurrentPage - 1) * ITEMS_PER_PAGE + 1}-
+                  {Math.min(safeCurrentPage * ITEMS_PER_PAGE, cars.length)} /{" "}
+                  {cars.length} ta ko'rsatilmoqda
+                </Text>
+
+                <HStack spacing={1.5}>
+                  <IconButton
+                    icon={<ChevronLeft size={16} />}
+                    size="sm"
+                    variant="outline"
+                    borderColor="border"
+                    color="textSecondary"
+                    borderRadius="lg"
+                    aria-label="Oldingi sahifa"
+                    isDisabled={safeCurrentPage === 1}
+                    onClick={() => goToPage(safeCurrentPage - 1)}
+                    _hover={{ bg: "blackAlpha.50", color: "text" }}
+                  />
+
+                  {getPageNumbers().map((page) => (
+                    <Button
+                      key={page}
+                      size="sm"
+                      minW="36px"
+                      borderRadius="lg"
+                      fontWeight="600"
+                      fontSize="xs"
+                      bg={page === safeCurrentPage ? ACCENT : "transparent"}
+                      color={page === safeCurrentPage ? "white" : "textSecondary"}
+                      border="1px solid"
+                      borderColor={page === safeCurrentPage ? ACCENT : "border"}
+                      _hover={{
+                        bg: page === safeCurrentPage ? ACCENT : "blackAlpha.50",
+                        color: page === safeCurrentPage ? "white" : "text",
+                      }}
+                      onClick={() => goToPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+
+                  <IconButton
+                    icon={<ChevronRight size={16} />}
+                    size="sm"
+                    variant="outline"
+                    borderColor="border"
+                    color="textSecondary"
+                    borderRadius="lg"
+                    aria-label="Keyingi sahifa"
+                    isDisabled={safeCurrentPage === totalPages}
+                    onClick={() => goToPage(safeCurrentPage + 1)}
+                    _hover={{ bg: "blackAlpha.50", color: "text" }}
+                  />
+                </HStack>
+              </Flex>
             )}
           </CardBody>
         </Card>
@@ -908,7 +1147,8 @@ export default function CarPage() {
                 />
               </FormControl>
 
-              <FormControl>
+              {/* Davlat raqami (Alohida UI va Validatsiya bilan) */}
+              <FormControl isInvalid={isRegionInvalid}>
                 <Flex align="center" justify="space-between" mb={1.5}>
                   <FormLabel
                     fontSize="xs"
@@ -949,57 +1189,51 @@ export default function CarPage() {
                   align="center"
                   bg="white"
                   color="black"
-                  border="1.5px solid #000"
+                  border="2px solid"
+                  borderColor={isRegionInvalid ? "red.500" : "#000"}
                   borderRadius="xl"
                   overflow="hidden"
                   boxShadow="0 2px 6px rgba(0,0,0,0.08)"
-                  h="42px"
-                  maxW="270px"
+                  h="44px"
+                  maxW="290px"
                   userSelect="none"
                   _focusWithin={{
-                    borderColor: ACCENT,
-                    boxShadow: `0 0 0 3px ${ACCENT}26`,
+                    borderColor: isRegionInvalid ? "red.500" : ACCENT,
+                    boxShadow: isRegionInvalid
+                      ? "0 0 0 3px rgba(239, 68, 68, 0.2)"
+                      : `0 0 0 3px ${ACCENT}26`,
                   }}
                   transition="all 0.2s ease"
                 >
-                  {/* 1. Viloyat kodi */}
+                  {/* Viloyat kodi (Faqat 2 ta raqam) */}
                   <Center
                     bg={formData.is_electric ? "#70C837" : "white"}
-                    px={2.5}
+                    w="48px"
                     h="100%"
                     transition="background 0.2s"
                   >
-                    <Text
+                    <Input
+                      ref={regionInputRef}
+                      placeholder="01"
+                      variant="unstyled"
+                      textAlign="center"
                       fontWeight="800"
                       fontSize="sm"
-                      lineHeight="1"
                       fontFamily="monospace"
-                      color={
-                        !formData.plate_number ||
-                        formData.plate_number.replace(/\s+/g, "").length < 1
-                          ? "gray.400"
-                          : "black"
-                      }
-                    >
-                      {(() => {
-                        const clean = (formData.plate_number || "")
-                          .replace(/\s+/g, "")
-                          .toUpperCase();
-                        if (clean.length === 0) return "20";
-                        if (clean.length === 1) return clean;
-                        return clean.slice(0, 2);
-                      })()}
-                    </Text>
+                      color="black"
+                      maxLength={2}
+                      value={plateRegion}
+                      onChange={handleRegionChange}
+                      _placeholder={{ color: "gray.300", fontWeight: "400" }}
+                    />
                   </Center>
 
-                  {/* Tik chiziq */}
                   <Box w="1.5px" bg="#000" alignSelf="stretch" />
 
-                  {/* 2. Asosiy Input */}
+                  {/* Raqamning qolgan qismi (Harf va Sonlar) */}
                   <Input
-                    isRequired
-                    name="plate_number"
-                    placeholder=" A 123 AA"
+                    ref={mainInputRef}
+                    placeholder="A 123 AA"
                     variant="unstyled"
                     px={2.5}
                     fontWeight="800"
@@ -1013,41 +1247,11 @@ export default function CarPage() {
                       fontWeight: "400",
                       fontSize: "xs",
                     }}
-                    value={(() => {
-                      const clean = (formData.plate_number || "")
-                        .replace(/\s+/g, "")
-                        .toUpperCase();
-                      return clean.length > 2 ? clean.slice(2) : "";
-                    })()}
-                    onChange={(e) => {
-                      const inputVal = e.target.value
-                        .replace(/\s+/g, "")
-                        .toUpperCase();
-                      const currentFull = (formData.plate_number || "")
-                        .replace(/\s+/g, "")
-                        .toUpperCase();
-
-                      let updatedValue = "";
-
-                      if (currentFull.length < 2) {
-                        // Birinchi 2 ta belgi viloyat kodiga ketadi
-                        updatedValue = (currentFull + inputVal).slice(0, 2);
-                      } else {
-                        // Dastlabki 2 ta viloyat kodi saqlanib, qolgan qismi kiritiladi
-                        const region = currentFull.slice(0, 2);
-                        updatedValue = region + inputVal;
-                      }
-
-                      handleChange({
-                        target: {
-                          name: "plate_number",
-                          value: updatedValue,
-                        },
-                      });
-                    }}
+                    value={plateMain}
+                    onChange={handleMainChange}
+                    onKeyDown={handleMainKeyDown}
                   />
 
-                  {/* 3. Bayroqcha va UZ */}
                   <VStack
                     spacing={0}
                     align="center"
@@ -1069,6 +1273,13 @@ export default function CarPage() {
                     </Text>
                   </VStack>
                 </Flex>
+
+                {/* Xatolik xabari */}
+                {isRegionInvalid && (
+                  <Text color="red.500" fontSize="xs" mt={1.5} fontWeight="500">
+                    Bunday viloyat kodi mavjud emas
+                  </Text>
+                )}
               </FormControl>
 
               {/* Mas'ul xodim */}
@@ -1211,6 +1422,7 @@ export default function CarPage() {
               type="submit"
               form="car-form"
               isLoading={isSubmitting}
+              isDisabled={isRegionInvalid || plateRegion.length < 2}
               size="sm"
               px={6}
               borderRadius="xl"
@@ -1223,7 +1435,7 @@ export default function CarPage() {
         </ModalContent>
       </Modal>
 
-      {/* 🟢 NORMA O'RNATISH MODAL */}
+      {/* NORMA O'RNATISH MODAL */}
       <Modal isOpen={isNormOpen} onClose={onNormClose} size="md" isCentered>
         <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
         <ModalContent
