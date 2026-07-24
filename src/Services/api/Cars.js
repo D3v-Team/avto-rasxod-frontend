@@ -5,36 +5,36 @@ class apiCars {
         CARS
   ========================== */
 
- static All = async (
-  page = 1,
-  limit = 10,
-  search = "",
-  is_active,
-  is_deleted = false,
-  responsible_employee_id = "",
-  driver_id = "",
-  sortBy = "",
-  sortOrder = "",
-) => {
-  const params = {
-    page,
-    limit,
-    is_deleted,
+  static All = async (
+    page = 1,
+    limit = 10,
+    search = "",
+    is_active,
+    is_deleted = false,
+    responsible_employee_id = "",
+    driver_id = "",
+    sortBy = "",
+    sortOrder = "",
+  ) => {
+    const params = {
+      page,
+      limit,
+      is_deleted,
+    };
+
+    if (search) params.search = search;
+    if (is_active !== undefined && is_active !== null)
+      params.is_active = is_active;
+    if (responsible_employee_id)
+      params.responsible_employee_id = responsible_employee_id;
+    if (driver_id) params.driver_id = driver_id;
+    if (sortBy) params.sortBy = sortBy;
+    if (sortOrder) params.sortOrder = sortOrder;
+
+    const response = await $api.get(`${BASE_URL}/cars`, { params });
+
+    return response;
   };
-
-  if (search) params.search = search;
-  if (is_active !== undefined && is_active !== null)
-    params.is_active = is_active;
-  if (responsible_employee_id)
-    params.responsible_employee_id = responsible_employee_id;
-  if (driver_id) params.driver_id = driver_id;
-  if (sortBy) params.sortBy = sortBy;
-  if (sortOrder) params.sortOrder = sortOrder;
-
-  const response = await $api.get(`${BASE_URL}/cars`, { params });
-
-  return response;
-};
   static One = async (id) => {
     const response = await $api.get(`${BASE_URL}/cars/${id}`);
     return response;
@@ -51,7 +51,7 @@ class apiCars {
   static Update = async (id, data) => {
     const response = await $api.patch(`${BASE_URL}/cars/${id}`, data, {
       showSuccessToast: "Avtomobil ma'lumotlari muvaffaqiyatli yangilandi",
-      showErrorToast:"Bunday raqamli avtomobil bazada mavjud !"
+      showErrorToast: "Bunday raqamli avtomobil bazada mavjud !",
     });
 
     return response;
@@ -62,6 +62,12 @@ class apiCars {
       showSuccessToast: "Avtomobil muvaffaqiyatli o'chirildi",
     });
 
+    return response;
+  };
+  static Restore = async (id) => {
+    const response = await $api.patch(`${BASE_URL}/cars/restore/${id}`, {
+      showSuccessToast: "Avtomobil muvaffaqiyatli yangilandi",
+    });
     return response;
   };
 
