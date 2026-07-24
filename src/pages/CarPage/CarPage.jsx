@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Box,
   Card,
@@ -36,6 +36,10 @@ import {
   HStack,
   Switch,
   ButtonGroup,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -49,20 +53,33 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
+  MoreVertical,
 } from "lucide-react";
 import { apiCars } from "../../Services/api/Cars";
 import { apiEmployees } from "../../Services/api/Users";
 import { apiFuel } from "../../Services/api/Fuels";
+import toast from "react-hot-toast";
 
 const ACCENT = "#3B82F6";
 
-// 🇺🇿 O'zbekiston avtomobil viloyat kodlari ro'yxati
 const VALID_REGION_CODES = [
-  "01", "10", "20", "25", "30", "35", "40", "50", "60", "70", "75", "80", "85", "90", "95"
+  "01",
+  "10",
+  "20",
+  "25",
+  "30",
+  "35",
+  "40",
+  "50",
+  "60",
+  "70",
+  "75",
+  "80",
+  "85",
+  "90",
+  "95",
 ];
 
-// 🔋 Backend hozircha is_electric maydonini qaytarmaydi/saqlamaydi,
-// shu sababli buni frontendda localStorage orqali saqlab turamiz.
 const ELECTRIC_STORAGE_KEY = "car_electric_status_map";
 
 const getElectricMap = () => {
@@ -103,7 +120,7 @@ const initialFormState = {
   responsible_employee_id: "",
   driver_id: "",
   speedometer: "",
-  is_electric: false, // ⚡ ELEKTROMOBIL BAYROQCHASI
+  is_electric: false,
   is_active: true,
 };
 
@@ -113,7 +130,6 @@ const initialNormState = {
   norm_per_100km: "",
 };
 
-// 📄 PAGINATION SOZLAMALARI
 const ITEMS_PER_PAGE = 10;
 
 export default function CarPage() {
@@ -123,24 +139,29 @@ export default function CarPage() {
   const [fuels, setFuels] = useState([]);
 
   const [loading, setLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [search, setSearch] = useState("");
-  const [showDeleted, setShowDeleted] = useState(false); // 1. O'chirilganlarni boshqarish
+  const [showDeleted, setShowDeleted] = useState(false);
   const [formData, setFormData] = useState(initialFormState);
-  
-  // 🚗 Raqam xususiy inputlari uchun state va ref-lar
+  const hasLoadedOnceRef = useRef(false);
+  const fetchIdRef = useRef(0);
+  const didMountRef = useRef(false);
+  const prevShowDeletedRef = useRef(showDeleted);
+
   const [plateRegion, setPlateRegion] = useState("");
   const [plateMain, setPlateMain] = useState("");
   const regionInputRef = useRef(null);
   const mainInputRef = useRef(null);
+  const plateRegionRef = useRef("");
 
   const [normFormData, setNormFormData] = useState(initialNormState);
   const [selectedCar, setSelectedCar] = useState(null);
   const [selectedCarId, setSelectedCarId] = useState(null);
   const [carToDelete, setCarToDelete] = useState(null);
-
-  // 📄 PAGINATION STATE
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
 
   const {
     isOpen: isFormOpen,
@@ -169,6 +190,26 @@ export default function CarPage() {
     return [];
   };
 
+  const extractPaginationMeta = (res) => {
+    const payload = res?.data;
+    const total =
+      payload?.total ??
+      payload?.count ??
+      payload?.totalRecords ??
+      payload?.data?.total ??
+      payload?.data?.count ??
+      0;
+
+    const pages =
+      payload?.totalPages ??
+      payload?.pages ??
+      payload?.data?.totalPages ??
+      payload?.data?.pages ??
+      Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
+
+    return { total: Number(total) || 0, pages: Number(pages) || 1 };
+  };
+
   const fetchEmployeesByRole = async () => {
     try {
       const [driversRes, responsiblesRes] = await Promise.all([
@@ -195,12 +236,27 @@ export default function CarPage() {
     }
   };
 
-  // 2. fetchCars - showDeleted qiymatini is_deleted sifatida uzatish
-  const fetchCars = async () => {
-    setLoading(true);
+  const fetchCars = async (targetPage = currentPage) => {
+    const fetchId = ++fetchIdRef.current;
+
+    if (!hasLoadedOnceRef.current) {
+      setLoading(true);
+    } else {
+      setIsFetching(true);
+    }
+
     try {
-      const res = await apiCars.All(1, 100, search, undefined, showDeleted);
+      const res = await apiCars.All(
+        targetPage,
+        ITEMS_PER_PAGE,
+        search,
+        undefined,
+        showDeleted,
+      );
+      if (fetchIdRef.current !== fetchId) return;
+
       const rawData = extractRecords(res);
+      const { total, pages } = extractPaginationMeta(res);
       const electricMap = getElectricMap();
 
       const mappedCars = rawData.map((car) => {
@@ -253,14 +309,28 @@ export default function CarPage() {
           is_electric: isElectric,
           is_active:
             car.is_active !== undefined ? Boolean(car.is_active) : true,
+          car_fuel_norm: Array.isArray(car.car_fuel_norm)
+            ? car.car_fuel_norm
+            : [],
         };
       });
 
       setCars(mappedCars);
+      setTotalItems(total || mappedCars.length);
+      setServerTotalPages(pages);
+
+      if (mappedCars.length === 0 && targetPage > 1 && targetPage > pages) {
+        setCurrentPage(pages);
+      }
     } catch (error) {
+      if (fetchIdRef.current !== fetchId) return;
       console.error("Avtomobillarni yuklashda xatolik:", error);
     } finally {
-      setLoading(false);
+      if (fetchIdRef.current === fetchId) {
+        setLoading(false);
+        setIsFetching(false);
+        hasLoadedOnceRef.current = true;
+      }
     }
   };
 
@@ -269,50 +339,73 @@ export default function CarPage() {
     fetchFuels();
   }, []);
 
-  // 3. useEffect dependency - showDeleted va search ga ulandi
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      prevShowDeletedRef.current = showDeleted;
+      fetchCars(currentPage);
+      return;
+    }
+
+    const showDeletedChanged = prevShowDeletedRef.current !== showDeleted;
+    prevShowDeletedRef.current = showDeleted;
+
+    if (showDeletedChanged) {
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      } else {
+        fetchCars(1);
+      }
+      return;
+    }
+
     const delayDebounce = setTimeout(() => {
-      fetchCars();
+      fetchCars(currentPage);
     }, 400);
     return () => clearTimeout(delayDebounce);
-  }, [search, showDeleted]);
+  }, [search, showDeleted, currentPage]);
 
-  // 📄 Qidiruv yoki filtr o'zgarganda 1-sahifaga qaytarish
-  useEffect(() => {
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
     setCurrentPage(1);
-  }, [search, showDeleted]);
+  };
 
-  // 📄 PAGINATION HISOBLASHLAR (mavjud logikaga tegmasdan, faqat ko'rsatish uchun)
-  const totalPages = Math.max(1, Math.ceil(cars.length / ITEMS_PER_PAGE));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedCars = cars.slice(
-    (safeCurrentPage - 1) * ITEMS_PER_PAGE,
-    safeCurrentPage * ITEMS_PER_PAGE,
+  const handleShowDeletedChange = (val) => {
+    setShowDeleted(val);
+    setCurrentPage(1);
+  };
+
+  const totalPages = useMemo(
+    () => Math.max(1, serverTotalPages),
+    [serverTotalPages],
   );
+  const safeCurrentPage = useMemo(
+    () => Math.min(currentPage, totalPages),
+    [currentPage, totalPages],
+  );
+  const paginatedCars = cars;
 
   const goToPage = (page) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
 
-  const getPageNumbers = () => {
+  const pageNumbers = useMemo(() => {
     const pages = [];
-    const maxVisible = 5;
+    const maxVisible = 3;
     let start = Math.max(1, safeCurrentPage - Math.floor(maxVisible / 2));
     let end = Math.min(totalPages, start + maxVisible - 1);
     start = Math.max(1, end - maxVisible + 1);
     for (let i = start; i <= end; i++) pages.push(i);
     return pages;
-  };
+  }, [safeCurrentPage, totalPages]);
 
-  // 8. Restore button uchun TODO
   const handleRestore = async (id) => {
-    try{
-      const res  = await apiCars.Restore(id);
-      fetchCars(res)
-
-    }finally{
-      setLoading(false)
+    try {
+      await apiCars.Restore(id);
+      fetchCars(currentPage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -324,11 +417,14 @@ export default function CarPage() {
     }));
   };
 
-  // 🚗 Avto raqamining qismlarini jamlash
   useEffect(() => {
     const fullPlate = `${plateRegion}${plateMain}`.trim();
     setFormData((prev) => ({ ...prev, plate_number: fullPlate }));
   }, [plateRegion, plateMain]);
+
+  useEffect(() => {
+    plateRegionRef.current = plateRegion;
+  }, [plateRegion]);
 
   const handleOpenCreate = () => {
     setSelectedCarId(null);
@@ -336,9 +432,6 @@ export default function CarPage() {
     setPlateRegion("");
     setPlateMain("");
     onFormOpen();
-    setTimeout(() => {
-      regionInputRef.current?.focus();
-    }, 100);
   };
 
   const handleOpenEdit = (car) => {
@@ -362,17 +455,16 @@ export default function CarPage() {
     onFormOpen();
   };
 
-  // 🚗 Viloyat kodi kiritilgandagi logika
   const handleRegionChange = (e) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 2);
     setPlateRegion(val);
+    plateRegionRef.current = val;
 
     if (val.length === 2) {
       mainInputRef.current?.focus();
     }
   };
 
-  // 🚗 Raqamning qolgan qismi kiritilgandagi va o'chirilayotgandagi logika
   const handleMainChange = (e) => {
     const val = e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
     setPlateMain(val);
@@ -380,6 +472,12 @@ export default function CarPage() {
 
   const handleMainKeyDown = (e) => {
     if (e.key === "Backspace" && plateMain === "") {
+      regionInputRef.current?.focus();
+    }
+  };
+
+  const handleMainFocus = () => {
+    if (plateRegionRef.current.length < 2) {
       regionInputRef.current?.focus();
     }
   };
@@ -428,9 +526,7 @@ export default function CarPage() {
         }
       }
       onFormClose();
-      fetchCars();
-    } catch (error) {
-      console.error("Saqlashda xatolik:", error);
+      fetchCars(currentPage);
     } finally {
       setIsSubmitting(false);
     }
@@ -442,7 +538,7 @@ export default function CarPage() {
       car_id: car.id,
       fuel_id: "",
       norm_per_100km: "",
-      current_balance:""
+      current_balance: "",
     });
     onNormOpen();
   };
@@ -460,7 +556,7 @@ export default function CarPage() {
       car_id: normFormData.car_id,
       fuel_id: normFormData.fuel_id,
       norm_per_100km: Number(normFormData.norm_per_100km),
-      current_balance: Number(normFormData.current_balance) 
+      current_balance: Number(normFormData.current_balance),
     };
 
     try {
@@ -485,7 +581,14 @@ export default function CarPage() {
       await apiCars.Delete(carToDelete.id);
       removeElectricStatus(carToDelete.id);
       onDeleteClose();
-      fetchCars();
+
+      const nextPage =
+        cars.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+      if (nextPage !== currentPage) {
+        setCurrentPage(nextPage);
+      } else {
+        fetchCars(currentPage);
+      }
     } catch (error) {
       console.error("O'chirishda xatolik:", error);
     } finally {
@@ -504,8 +607,6 @@ export default function CarPage() {
 
     return { region, main: formattedMain };
   };
-
-  
 
   return (
     <Box
@@ -568,7 +669,7 @@ export default function CarPage() {
                   boxShadow: `0 0 0 3px ${ACCENT}26`,
                 }}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={handleSearchChange}
               />
             </InputGroup>
 
@@ -595,7 +696,7 @@ export default function CarPage() {
                 fontWeight="600"
                 fontSize="xs"
                 px={4}
-                onClick={() => setShowDeleted(false)}
+                onClick={() => handleShowDeletedChange(false)}
               >
                 Faol
               </Button>
@@ -612,26 +713,34 @@ export default function CarPage() {
                 fontWeight="600"
                 fontSize="xs"
                 px={4}
-                onClick={() => setShowDeleted(true)}
+                onClick={() => handleShowDeletedChange(true)}
               >
                 O'chirilgan
               </Button>
             </ButtonGroup>
           </HStack>
 
-          {/* COUNT BADGE */}
-          <Badge
-            fontSize="xs"
-            px={3}
-            py={1.5}
-            borderRadius="lg"
-            bg="blackAlpha.50"
-            color="textSecondary"
-            border="1px solid"
-            borderColor="border"
-          >
-            {showDeleted ? "O'chirilgan:" : "Jami:"} {cars.length} ta
-          </Badge>
+          {/* COUNT BADGE + BACKGROUND YANGILANISH INDIKATORI */}
+          <HStack spacing={3}>
+            {isFetching && (
+              <HStack spacing={1.5} color="textSecondary">
+                <Spinner size="xs" color={ACCENT} thickness="2px" />
+                <Text fontSize="xs">Yangilanmoqda...</Text>
+              </HStack>
+            )}
+            <Badge
+              fontSize="xs"
+              px={3}
+              py={1.5}
+              borderRadius="lg"
+              bg="blackAlpha.50"
+              color="textSecondary"
+              border="1px solid"
+              borderColor="border"
+            >
+              {showDeleted ? "O'chirilgan:" : "Jami:"} {totalItems} ta
+            </Badge>
+          </HStack>
         </Flex>
 
         {/* TABLE CARD SECTION */}
@@ -652,7 +761,7 @@ export default function CarPage() {
                   </Text>
                 </VStack>
               </Center>
-            ) : cars.length === 0 ? (
+            ) : cars.length === 0 && !isFetching ? (
               <Center py={16}>
                 <VStack spacing={3}>
                   <CarIcon
@@ -666,8 +775,14 @@ export default function CarPage() {
                 </VStack>
               </Center>
             ) : (
-              <Box overflowX="auto">
-                <Table variant="simple" size="md">
+              <Box
+                w="100%"
+                overflow="hidden"
+                opacity={isFetching ? 0.55 : 1}
+                pointerEvents={isFetching ? "none" : "auto"}
+                transition="opacity 0.15s ease"
+              >
+                <Table variant="simple" size="sm" style={{ tableLayout: "fixed", width: "100%" }}>
                   <Thead>
                     <Tr bg="surfBlur">
                       <Th
@@ -675,8 +790,10 @@ export default function CarPage() {
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
-                        py={4}
-                        pl={6}
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="20%"
                       >
                         Avtomobil nomi
                       </Th>
@@ -685,6 +802,10 @@ export default function CarPage() {
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="15%"
                       >
                         Davlat raqami
                       </Th>
@@ -693,6 +814,10 @@ export default function CarPage() {
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="15%"
                       >
                         Haydovchi
                       </Th>
@@ -701,6 +826,10 @@ export default function CarPage() {
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="15%"
                       >
                         Mas'ul xodim
                       </Th>
@@ -709,26 +838,52 @@ export default function CarPage() {
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="12%"
                       >
                         Speedometer
                       </Th>
+
                       <Th
                         color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="13%"
+                      >
+                        Yoqilg'i qoldig'i
+                      </Th>
+
+                      <Th
+                        color="text"
+                        fontSize="xs"
+                        letterSpacing="0.5px"
+                        borderColor="border"
+                        py={3}
+                        px={3}
+                        whiteSpace="nowrap"
+                        w="8%"
                       >
                         Holati
                       </Th>
+
                       <Th
                         textAlign="center"
                         color="text"
                         fontSize="xs"
                         letterSpacing="0.5px"
                         borderColor="border"
-                        pr={6}
+                        py={3}
+                        px={2}
+                        whiteSpace="nowrap"
+                        w="50px"
                       >
-                        Amallar
+                        ⋮
                       </Th>
                     </Tr>
                   </Thead>
@@ -739,39 +894,37 @@ export default function CarPage() {
                         transition="all 0.2s ease"
                         _hover={{
                           bg: "blackAlpha.50",
-                          transform: "translateY(-1px)",
                         }}
                       >
                         {/* 1. Avtomobil Nomi */}
-                        <Td borderColor="border" pl={6} py={4}>
-                          <HStack spacing={3}>
+                        <Td borderColor="border" px={3} py={2.5}>
+                          <HStack spacing={2.5} overflow="hidden">
                             <Center
-                              w="38px"
-                              h="38px"
-                              borderRadius="xl"
+                              w="32px"
+                              h="32px"
+                              minW="32px"
+                              borderRadius="lg"
                               bgGradient={`linear(to-br, ${car.is_electric ? "#10B98120" : ACCENT + "20"}, ${car.is_electric ? "#10B98108" : ACCENT + "08"})`}
                               border="1px solid"
                               borderColor={
                                 car.is_electric ? "#10B98130" : `${ACCENT}30`
                               }
-                              boxShadow={`0 2px 8px ${car.is_electric ? "#10B98120" : ACCENT + "20"}`}
                               color={car.is_electric ? "green.500" : ACCENT}
-                              transition="all 0.2s"
-                              _hover={{ transform: "scale(1.05)" }}
                             >
-                              <CarIcon size={20} strokeWidth={2.2} />
+                              <CarIcon size={16} strokeWidth={2.2} />
                             </Center>
-                            <VStack align="start" spacing={0}>
-                              <HStack spacing={1.5}>
-                                <Text
-                                  fontWeight="600"
-                                  color="text"
-                                  fontSize="sm"
-                                >
-                                  {car.name}
-                                </Text>
-                              </HStack>
-                              <Text fontSize="xs" color="textSecondary">
+                            <VStack align="start" spacing={0} overflow="hidden">
+                              <Text
+                                fontWeight="600"
+                                color="text"
+                                fontSize="xs"
+                                noOfLines={2}
+                                wordBreak="break-word"
+                                lineHeight="1.2"
+                              >
+                                {car.name}
+                              </Text>
+                              <Text fontSize="10px" color="textSecondary" lineHeight="1.2">
                                 Transport
                               </Text>
                             </VStack>
@@ -779,26 +932,26 @@ export default function CarPage() {
                         </Td>
 
                         {/* 2. Davlat raqami */}
-                        <Td borderColor="border">
+                        <Td borderColor="border" px={3} py={2.5}>
                           <Flex
                             align="center"
                             bg="white"
                             color="black"
-                            border="1.5px solid #000"
-                            borderRadius="lg"
+                            border="1px solid #000"
+                            borderRadius="md"
                             overflow="hidden"
-                            h="32px"
+                            h="26px"
                             w="fit-content"
                             userSelect="none"
                           >
                             <Center
                               bg={car.is_electric ? "#70C837" : "white"}
-                              px={2}
+                              px={1.5}
                               h="100%"
                             >
                               <Text
                                 fontWeight="800"
-                                fontSize="xs"
+                                fontSize="11px"
                                 lineHeight="1"
                                 fontFamily="monospace"
                                 color="black"
@@ -807,17 +960,17 @@ export default function CarPage() {
                               </Text>
                             </Center>
 
-                            <Box w="1.5px" bg="#000" alignSelf="stretch" />
+                            <Box w="1px" bg="#000" alignSelf="stretch" />
 
-                            <Center px={2.5} h="100%">
+                            <Center px={1.5} h="100%">
                               <Text
                                 fontWeight="800"
-                                fontSize="xs"
+                                fontSize="11px"
                                 fontFamily="monospace"
-                                letterSpacing="1px"
+                                letterSpacing="0.5px"
                                 textTransform="uppercase"
                                 color="black"
-                                whiteSpace="pre"
+                                whiteSpace="nowrap"
                               >
                                 {formatPlateNumber(car.plate_number).main}
                               </Text>
@@ -826,19 +979,17 @@ export default function CarPage() {
                             <VStack
                               spacing={0}
                               align="center"
-                              pl={0.5}
-                              pr={1.5}
+                              px={1}
                               justify="center"
                             >
-                              <Text fontSize="9px" lineHeight="1">
+                              <Text fontSize="8px" lineHeight="1">
                                 🇺🇿
                               </Text>
                               <Text
-                                fontSize="6.5px"
+                                fontSize="5.5px"
                                 fontWeight="900"
                                 color="#0033A0"
                                 lineHeight="1"
-                                mt="1px"
                               >
                                 UZ
                               </Text>
@@ -847,36 +998,49 @@ export default function CarPage() {
                         </Td>
 
                         {/* 3. Haydovchi */}
-                        <Td borderColor="border">
-                          <Text color="text" fontSize="sm" fontWeight="500">
+                        <Td borderColor="border" px={3} py={2.5}>
+                          <Text 
+                            color="text" 
+                            fontSize="xs" 
+                            fontWeight="500" 
+                            noOfLines={2} 
+                            wordBreak="break-word"
+                            lineHeight="1.2"
+                          >
                             {car.driver_name}
                           </Text>
                         </Td>
 
                         {/* 4. Mas'ul Xodim */}
-                        <Td borderColor="border">
-                          <Text color="textSecondary" fontSize="sm">
+                        <Td borderColor="border" px={3} py={2.5}>
+                          <Text 
+                            color="textSecondary" 
+                            fontSize="xs" 
+                            noOfLines={2} 
+                            wordBreak="break-word"
+                            lineHeight="1.2"
+                          >
                             {car.responsible_name}
                           </Text>
                         </Td>
 
                         {/* 5. Speedometer */}
-                        <Td borderColor="border">
+                        <Td borderColor="border" px={3} py={2.5}>
                           <HStack
-                            spacing={2}
+                            spacing={1.5}
                             bg="blackAlpha.50"
-                            px={2.5}
-                            py={1}
-                            borderRadius="lg"
+                            px={2}
+                            py={0.5}
+                            borderRadius="md"
                             display="inline-flex"
                             border="1px solid"
                             borderColor="border"
                           >
                             <Gauge
-                              size={14}
+                              size={12}
                               color="var(--chakra-colors-textSecondary)"
                             />
-                            <Text color="text" fontSize="xs" fontWeight="600">
+                            <Text color="text" fontSize="11px" fontWeight="600" whiteSpace="nowrap">
                               {car.speedometer
                                 ? car.speedometer.toLocaleString("uz-UZ")
                                 : 0}{" "}
@@ -885,13 +1049,61 @@ export default function CarPage() {
                           </HStack>
                         </Td>
 
-                        {/* 6. Holati */}
-                        <Td borderColor="border">
+                        {/* 6. YOQILG'I QOLDIG'I */}
+                        <Td borderColor="border" px={3} py={2.5}>
+                          {car.car_fuel_norm && car.car_fuel_norm.length > 0 ? (
+                            <VStack align="start" spacing={1} maxW="100%">
+                              {car.car_fuel_norm
+                                .slice(0, 2)
+                                .map((norm, idx) => {
+                                  const fuelName =
+                                    norm?.fuel?.name || "Yoqilg'i";
+                                  const balance = Number(
+                                    norm?.norm_per_100km || 0,
+                                  ).toFixed(1);
+
+                                  return (
+                                    <HStack
+                                      key={idx}
+                                      spacing={1}
+                                      px={1.5}
+                                      py={0.5}
+                                      borderRadius="md"
+                                      bg="blue.50"
+                                      color="blue.700"
+                                      border="1px solid"
+                                      borderColor="blue.100"
+                                      fontSize="10px"
+                                      fontWeight="600"
+                                      w="fit-content"
+                                    >
+                                      <Fuel size={10} />
+                                      <Text lineHeight="1" whiteSpace="nowrap">
+                                        {fuelName}: <b>{balance}</b>
+                                      </Text>
+                                    </HStack>
+                                  );
+                                })}
+                            </VStack>
+                          ) : (
+                            <Text
+                              fontSize="11px"
+                              color="textSecondary"
+                              fontStyle="italic"
+                              whiteSpace="nowrap"
+                            >
+                              Mavjud emas
+                            </Text>
+                          )}
+                        </Td>
+
+                        {/* 7. Holati */}
+                        <Td borderColor="border" px={3} py={2.5}>
                           {car.is_active ? (
                             <HStack
-                              spacing={1.5}
-                              px={2.5}
-                              py={1}
+                              spacing={1}
+                              px={2}
+                              py={0.5}
                               borderRadius="full"
                               bg="green.50"
                               color="green.700"
@@ -900,20 +1112,20 @@ export default function CarPage() {
                               display="inline-flex"
                             >
                               <Box
-                                w="6px"
-                                h="6px"
+                                w="5px"
+                                h="5px"
                                 borderRadius="full"
                                 bg="green.500"
                               />
-                              <Text fontSize="xs" fontWeight="600">
+                              <Text fontSize="10px" fontWeight="600" whiteSpace="nowrap">
                                 Faol
                               </Text>
                             </HStack>
                           ) : (
                             <HStack
-                              spacing={1.5}
-                              px={2.5}
-                              py={1}
+                              spacing={1}
+                              px={2}
+                              py={0.5}
                               borderRadius="full"
                               bg="red.50"
                               color="red.700"
@@ -922,108 +1134,101 @@ export default function CarPage() {
                               display="inline-flex"
                             >
                               <Box
-                                w="6px"
-                                h="6px"
+                                w="5px"
+                                h="5px"
                                 borderRadius="full"
                                 bg="red.500"
                               />
-                              <Text fontSize="xs" fontWeight="600">
+                              <Text fontSize="10px" fontWeight="600" whiteSpace="nowrap">
                                 Nofaol
                               </Text>
                             </HStack>
                           )}
                         </Td>
 
-                        {/* AMALLAR */}
-                        <Td borderColor="border" pr={6}>
-                          <Flex justify="center" align="center" gap={2}>
-                            {showDeleted ? (
-                              <Button
+                        {/* 8. AMALLAR (KEBAB MENU) */}
+                        <Td borderColor="border" px={2} py={2.5} textAlign="center">
+                          {showDeleted ? (
+                            <Tooltip label="Tiklash" hasArrow>
+                              <IconButton
+                                icon={<RotateCcw size={14} />}
                                 size="xs"
-                                leftIcon={<RotateCcw size={13} />}
+                                w="26px"
+                                h="26px"
+                                minW="26px"
                                 colorScheme="green"
                                 variant="light"
                                 bg="green.50"
                                 color="green.600"
                                 _hover={{ bg: "green.100" }}
-                                fontSize="11px"
-                                fontWeight="600"
-                                borderRadius="lg"
-                                px={3}
-                                h="28px"
+                                borderRadius="md"
+                                aria-label="Tiklash"
                                 onClick={() => handleRestore(car.id)}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Menu isLazy placement="bottom-end">
+                              <MenuButton
+                                as={IconButton}
+                                icon={<MoreVertical size={15} />}
+                                size="xs"
+                                w="26px"
+                                h="26px"
+                                minW="26px"
+                                variant="ghost"
+                                color="textSecondary"
+                                borderRadius="md"
+                                border="1px solid"
+                                borderColor="border"
+                                _hover={{
+                                  bg: "blackAlpha.100",
+                                  color: "text",
+                                }}
+                                aria-label="Amallar"
+                              />
+                              <MenuList
+                                bg="surface"
+                                borderColor="border"
+                                boxShadow="lg"
+                                p={1}
+                                minW="130px"
                               >
-                                Tiklash
-                              </Button>
-                            ) : (
-                              <>
-                                <Tooltip
-                                  label="Yoqilg'i normasini belgilash"
-                                  hasArrow
+                                <MenuItem
+                                  icon={<Fuel size={14} color={ACCENT} />}
+                                  fontSize="xs"
+                                  fontWeight="500"
+                                  color="text"
+
+                                  _hover={{ bg: "blackAlpha.50" }}
+                                  onClick={() => handleOpenNormModal(car)}
                                 >
-                                  <Button
-                                    size="xs"
-                                    variant="outline"
-                                    borderColor={`${ACCENT}40`}
-                                    color={ACCENT}
-                                    _hover={{
-                                      bg: `${ACCENT}15`,
-                                      borderColor: ACCENT,
-                                    }}
-                                    fontSize="11px"
-                                    fontWeight="600"
-                                    borderRadius="lg"
-                                    px={3}
-                                    h="28px"
-                                    onClick={() => handleOpenNormModal(car)}
-                                  >
-                                    Norma
-                                  </Button>
-                                </Tooltip>
+                                  Norma
+                                </MenuItem>
+                                <MenuItem
+                                  icon={<Pencil size={14} />}
+                                  fontSize="xs"
+                                  fontWeight="500"
+                                  color="text"
+                           
+                                  _hover={{ bg: "blackAlpha.50" }}
+                                  onClick={() => handleOpenEdit(car)}
+                                >
+                                  Tahrirlash
+                                </MenuItem>
+                                <MenuItem
+                                  icon={<Trash2 size={14} color="var(--chakra-colors-red-500)" />}
+                                  fontSize="xs"
+                                  fontWeight="500"
+                                  color="red.500"
 
-                                <Tooltip label="Tahrirlash" hasArrow>
-                                  <IconButton
-                                    icon={<Pencil size={14} />}
-                                    size="xs"
-                                    w="28px"
-                                    h="28px"
-                                    variant="ghost"
-                                    color="textSecondary"
-                                    borderRadius="lg"
-                                    border="1px solid"
-                                    borderColor="transparent"
-                                    _hover={{
-                                      bg: "blackAlpha.100",
-                                      color: "text",
-                                      borderColor: "border",
-                                    }}
-                                    aria-label="Tahrirlash"
-                                    onClick={() => handleOpenEdit(car)}
-                                  />
-                                </Tooltip>
-
-                                <Tooltip label="O'chirish" hasArrow>
-                                  <IconButton
-                                    icon={<Trash2 size={14} />}
-                                    size="xs"
-                                    w="28px"
-                                    h="28px"
-                                    variant="ghost"
-                                    color="red.500"
-                                    borderRadius="lg"
-                                    border="1px solid"
-                                    borderColor="transparent"
-                                    _hover={{
-                                      bg: "red.50",
-                                      borderColor: "red.200",
-                                    }}
-                                    aria-label="O'chirish"
-                                    onClick={() => handleOpenDelete(car)}
-                                  />
-                                </Tooltip>
-                              </>
-                            )}
-                          </Flex>
+                                  _hover={{ bg: "red.50" }}
+                                  onClick={() => handleOpenDelete(car)}
+                                >
+                                  O'chirish
+                                </MenuItem>
+                              </MenuList>
+                            </Menu>
+                          )}
                         </Td>
                       </Tr>
                     ))}
@@ -1033,7 +1238,7 @@ export default function CarPage() {
             )}
 
             {/* PAGINATION CONTROLS */}
-            {!loading && cars.length > 0 && (
+            {!loading && totalItems > 0 && (
               <Flex
                 justify="space-between"
                 align="center"
@@ -1046,8 +1251,8 @@ export default function CarPage() {
               >
                 <Text fontSize="xs" color="textSecondary">
                   {(safeCurrentPage - 1) * ITEMS_PER_PAGE + 1}-
-                  {Math.min(safeCurrentPage * ITEMS_PER_PAGE, cars.length)} /{" "}
-                  {cars.length} ta ko'rsatilmoqda
+                  {Math.min(safeCurrentPage * ITEMS_PER_PAGE, totalItems)} /{" "}
+                  {totalItems} ta ko'rsatilmoqda
                 </Text>
 
                 <HStack spacing={1.5}>
@@ -1064,7 +1269,7 @@ export default function CarPage() {
                     _hover={{ bg: "blackAlpha.50", color: "text" }}
                   />
 
-                  {getPageNumbers().map((page) => (
+                  {pageNumbers.map((page) => (
                     <Button
                       key={page}
                       size="sm"
@@ -1073,7 +1278,9 @@ export default function CarPage() {
                       fontWeight="600"
                       fontSize="xs"
                       bg={page === safeCurrentPage ? ACCENT : "transparent"}
-                      color={page === safeCurrentPage ? "white" : "textSecondary"}
+                      color={
+                        page === safeCurrentPage ? "white" : "textSecondary"
+                      }
                       border="1px solid"
                       borderColor={page === safeCurrentPage ? ACCENT : "border"}
                       _hover={{
@@ -1157,7 +1364,7 @@ export default function CarPage() {
                 />
               </FormControl>
 
-              {/* Davlat raqami (Alohida UI va Validatsiya bilan) */}
+              {/* Davlat raqami */}
               <FormControl isInvalid={isRegionInvalid}>
                 <Flex align="center" justify="space-between" mb={1.5}>
                   <FormLabel
@@ -1215,7 +1422,6 @@ export default function CarPage() {
                   }}
                   transition="all 0.2s ease"
                 >
-                  {/* Viloyat kodi (Faqat 2 ta raqam) */}
                   <Center
                     bg={formData.is_electric ? "#70C837" : "white"}
                     w="48px"
@@ -1240,7 +1446,6 @@ export default function CarPage() {
 
                   <Box w="1.5px" bg="#000" alignSelf="stretch" />
 
-                  {/* Raqamning qolgan qismi (Harf va Sonlar) */}
                   <Input
                     ref={mainInputRef}
                     placeholder="A 123 AA"
@@ -1260,6 +1465,7 @@ export default function CarPage() {
                     value={plateMain}
                     onChange={handleMainChange}
                     onKeyDown={handleMainKeyDown}
+                    onFocus={handleMainFocus}
                   />
 
                   <VStack
@@ -1284,7 +1490,6 @@ export default function CarPage() {
                   </VStack>
                 </Flex>
 
-                {/* Xatolik xabari */}
                 {isRegionInvalid && (
                   <Text color="red.500" fontSize="xs" mt={1.5} fontWeight="500">
                     Bunday viloyat kodi mavjud emas
@@ -1603,27 +1808,24 @@ export default function CarPage() {
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>
-                  Dastlabki yoqilgisi
-                </FormLabel>
+                <FormLabel>Dastlabki yoqilgisi</FormLabel>
                 <Input
-                type="number"
-                placeholder="Masalan: 10 Litr"
-                bg={"surface"}
-                color={"text"}
-                borderColor={"border"}
-                borderRadius={"xl"}
-                size={"md"}
-                focusBorderColor={ACCENT}
-                _hover={{borderColor: ACCENT}}
-                value={normFormData.current_balance}
-                onChange={(e)=>{
-                  setNormFormData({
-                    ...normFormData,
-                    current_balance:e.target.value
-                  })
-                }}
-          
+                  type="number"
+                  placeholder="Masalan: 10 Litr"
+                  bg={"surface"}
+                  color={"text"}
+                  borderColor={"border"}
+                  borderRadius={"xl"}
+                  size={"md"}
+                  focusBorderColor={ACCENT}
+                  _hover={{ borderColor: ACCENT }}
+                  value={normFormData.current_balance}
+                  onChange={(e) => {
+                    setNormFormData({
+                      ...normFormData,
+                      current_balance: e.target.value,
+                    });
+                  }}
                 />
               </FormControl>
             </VStack>

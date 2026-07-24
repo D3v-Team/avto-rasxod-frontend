@@ -108,24 +108,18 @@ export default function FuelPage() {
     onFormOpen();
   };
 
-  const handleOpenEdit = (fuel) => {
-    setModalMode("edit");
-    setSelectedFuelId(fuel.id);
+ const handleOpenEdit = (fuel) => {
+  setModalMode("edit");
+  setSelectedFuelId(fuel.id);
 
-    let currentUnit = fuel.unit || fuel.type || "";
-    if (currentUnit === "l" || currentUnit === "litr") currentUnit = "litr";
-    if (currentUnit === "m3" || currentUnit === "m³" || currentUnit === "kub")
-      currentUnit = "m³";
-    if (currentUnit === "kg" || currentUnit === "kilogram") currentUnit = "kg";
+  setFormData({
+    unit: fuel.unit || "",
+    name: fuel.name || "",
+    price: fuel.price ?? "",
+  });
 
-    setFormData({
-      unit: currentUnit,
-      name: fuel.name || "",
-      price: fuel.price ?? "",
-    });
-
-    onFormOpen();
-  };
+  onFormOpen();
+};
 
   const handleOpenDelete = (fuel) => {
     setFuelToDelete(fuel);
@@ -402,7 +396,7 @@ export default function FuelPage() {
                   borderColor="border"
                   _hover={{ borderColor: "primary" }}
                 >
-                  <option value="l">Litr (L)</option>
+                  <option value="litr">Litr (L)</option>
                   <option value="m3">Kub metr (m³)</option>
                   <option value="kwh">Kilovatt-soat (kWh)</option>
 

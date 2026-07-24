@@ -51,7 +51,6 @@ class apiCars {
   static Update = async (id, data) => {
     const response = await $api.patch(`${BASE_URL}/cars/${id}`, data, {
       showSuccessToast: "Avtomobil ma'lumotlari muvaffaqiyatli yangilandi",
-      showErrorToast: "Bunday raqamli avtomobil bazada mavjud !",
     });
 
     return response;
@@ -64,12 +63,17 @@ class apiCars {
 
     return response;
   };
-  static Restore = async (id) => {
-    const response = await $api.patch(`${BASE_URL}/cars/restore/${id}`, {
-      showSuccessToast: "Avtomobil muvaffaqiyatli yangilandi",
-    });
-    return response;
-  };
+ static Restore = async (id) => {
+  const response = await $api.patch(
+    `${BASE_URL}/cars/restore/${id}`,
+    {},
+    {
+      showSuccessToast: "Avtomobil muvaffaqiyatli tiklandi",
+    }
+  );
+
+  return response;
+};
 
   /* ==========================
         CAR FUEL NORMS

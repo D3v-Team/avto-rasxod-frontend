@@ -24,9 +24,9 @@ export default function handleApiError(error) {
             toastService.error("Ma'lumot topilmadi");
             break;
 
-        case 409:
-            toastService.error("Mavjud ma'lumot bilan to‘qnashuv");
-            break;
+        // case 409:
+        //     toastService.error("Mavjud ma'lumot bailan to‘qnashuv");
+        //     break;
 
         case 422:
             toastService.error("Yaroqsiz ma'lumot yuborildi");
