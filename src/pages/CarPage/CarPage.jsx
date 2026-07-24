@@ -307,7 +307,13 @@ export default function CarPage() {
 
   // 8. Restore button uchun TODO
   const handleRestore = async (id) => {
-    // TODO: Backend restore endpoint tayyor bo'lganda shu yerda ishlatiladi.
+    try{
+      const res  = await apiCars.Restore(id);
+      fetchCars(res)
+
+    }finally{
+      setLoading(false)
+    }
   };
 
   const handleChange = (e) => {
@@ -436,6 +442,7 @@ export default function CarPage() {
       car_id: car.id,
       fuel_id: "",
       norm_per_100km: "",
+      current_balance:""
     });
     onNormOpen();
   };
@@ -453,6 +460,7 @@ export default function CarPage() {
       car_id: normFormData.car_id,
       fuel_id: normFormData.fuel_id,
       norm_per_100km: Number(normFormData.norm_per_100km),
+      current_balance: Number(normFormData.current_balance) 
     };
 
     try {
@@ -496,6 +504,8 @@ export default function CarPage() {
 
     return { region, main: formattedMain };
   };
+
+  
 
   return (
     <Box
@@ -1590,6 +1600,30 @@ export default function CarPage() {
                       norm_per_100km: e.target.value,
                     })
                   }
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>
+                  Dastlabki yoqilgisi
+                </FormLabel>
+                <Input
+                type="number"
+                placeholder="Masalan: 10 Litr"
+                bg={"surface"}
+                color={"text"}
+                borderColor={"border"}
+                borderRadius={"xl"}
+                size={"md"}
+                focusBorderColor={ACCENT}
+                _hover={{borderColor: ACCENT}}
+                value={normFormData.current_balance}
+                onChange={(e)=>{
+                  setNormFormData({
+                    ...normFormData,
+                    current_balance:e.target.value
+                  })
+                }}
+          
                 />
               </FormControl>
             </VStack>
