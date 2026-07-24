@@ -51,6 +51,40 @@ class apiStatistika {
     );
     return response.data;
   };
+    static OrganizationMonthlyReport = async ({ 
+    year, 
+    month, 
+    page = 1, 
+    limit = 10, 
+    is_active, 
+    search 
+  }) => {
+    const params = { year, month, page, limit };
+    if (is_active !== undefined) params.is_active = is_active;
+    if (search) params.search = search;
+
+    const response = await $api.get(
+      "/car-daily-expenses/organization-monthly-report",
+      { params }
+    );
+    return response.data;
+  };
+  static OrganizationMonthlyReportExcel = async ({
+    year,
+    month,
+    is_active,
+    search,
+  }) => {
+    const params = { year, month };
+    if (is_active !== undefined) params.is_active = is_active;
+    if (search) params.search = search;
+
+    const response = await $api.get(
+      "/car-daily-expenses/organization-monthly-report-excel",
+      { params, responseType: "blob" },
+    );
+    return response;
+  };
 }
 
 export { apiStatistika };
