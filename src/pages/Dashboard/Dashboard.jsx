@@ -99,6 +99,38 @@ function extractList(payload) {
   return [];
 }
 
+// Backend javobi "groups[].cars[]" ko'rinishida guruhlangan holda keladi
+// (har bir guruh — mas'ul shaxs bo'yicha). Jadval uchun barcha guruhlardagi
+// mashinalarni bitta tekis ro'yxatga yig'amiz. Boshqa mumkin bo'lgan
+// (flat) shakllar uchun fallback ham qoldirilgan.
+function extractReportList(response) {
+  if (Array.isArray(response?.groups)) {
+    return response.groups.flatMap((g) =>
+      Array.isArray(g?.cars) ? g.cars : [],
+    );
+  }
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.data?.data)) return response.data.data;
+  if (Array.isArray(response?.data?.items)) return response.data.items;
+  if (Array.isArray(response?.items)) return response.items;
+  if (Array.isArray(response?.results)) return response.results;
+  if (Array.isArray(response?.rows)) return response.rows;
+  return [];
+}
+
+function extractReportTotal(response) {
+  const candidates = [
+    response?.total,
+    response?.data?.total,
+    response?.meta?.total,
+    response?.count,
+    response?.data?.count,
+  ];
+  const found = candidates.find((v) => v !== undefined && v !== null);
+  return found !== undefined ? found : 0;
+}
+
 function labelize(key) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -265,7 +297,11 @@ function Dashboard() {
     let cancelled = false;
     setCarsLoading(true);
     apiCars
-      .All(1, 100, "", true, "", "", "name", "ASC")
+      // ✅ TUZATILDI: is_deleted uchun `false` qo'shildi (5-argument).
+      // Avval bu joy bo'sh qoldirilgani sababli keyingi qiymatlar
+      // ("name", "ASC") mos kelmay, driver_id / sortBy ga tushib,
+      // backenddan 400 xatolik qaytarilayotgan edi.
+      .All(1, 100, "", true, false, "", "", "name", "ASC")
       .then((response) => {
         if (cancelled) return;
         const raw = extractList(response?.data);
@@ -375,8 +411,8 @@ function Dashboard() {
       };
       const response = await apiStatistika.OrganizationMonthlyReport(params);
 
-      const items = pick(response, ["data"], []);
-      const total = pick(response, ["total"], 0);
+      const items = extractReportList(response);
+      const total = extractReportTotal(response);
 
       const formatted = (Array.isArray(items) ? items : []).map((item) => {
         const car = item.car || {};
