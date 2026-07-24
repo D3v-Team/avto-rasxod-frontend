@@ -63,11 +63,8 @@ const formatAsInputDate = (dateObj) => {
 };
 
 const getTodayDate = () => formatAsInputDate(new Date());
-const getMonthStartDate = () => {
-  const d = new Date();
-  d.setDate(1);
-  return formatAsInputDate(d);
-};
+const getCurrentYear = () => new Date().getFullYear();
+const getCurrentMonth = () => new Date().getMonth() + 1;
 
 const isFutureDate = (dateStr) => {
   const today = new Date();
@@ -76,6 +73,89 @@ const isFutureDate = (dateStr) => {
   checkDate.setHours(0, 0, 0, 0);
   return checkDate > today;
 };
+
+// oy nomlari (o'zbekcha)
+const MONTH_NAMES_UZ = [
+  "Yanvar",
+  "Fevral",
+  "Mart",
+  "Aprel",
+  "May",
+  "Iyun",
+  "Iyul",
+  "Avgust",
+  "Sentabr",
+  "Oktabr",
+  "Noyabr",
+  "Dekabr",
+];
+
+// tanlangan oy/yil bo'yicha yil ro'yxati (joriy yildan -6 dan +1 gacha)
+function getYearOptions() {
+  const current = getCurrentYear();
+  const years = [];
+  for (let y = current - 6; y <= current + 1; y++) years.push(y);
+  return years;
+}
+
+// tanlangan oy uchun boshlang'ich sana (hech qanday yozuv bo'lmaganda)
+function getMonthStartDateFor(year, month) {
+  return formatAsInputDate(new Date(year, month - 1, 1));
+}
+
+// tanlangan oy/yil asosida oyning birinchi va oxirgi kunini hisoblaydi
+function getMonthDateRange(year, month) {
+  const from = new Date(year, month - 1, 1);
+  const to = new Date(year, month, 0); // oyning oxirgi kuni
+  return {
+    date_from: formatAsInputDate(from),
+    date_to: formatAsInputDate(to),
+  };
+}
+
+// ---------- localStorage helpers ----------
+const LS_FILTERS_KEY = "costPage:filters";
+const LS_CAR_KEY = "costPage:selectedCarId";
+
+function loadFiltersFromStorage() {
+  try {
+    const raw = window.localStorage.getItem(LS_FILTERS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch (e) {
+    // localStorage mavjud emas yoki JSON buzilgan — e'tiborsiz qoldiramiz
+  }
+  return null;
+}
+
+function saveFiltersToStorage(filters) {
+  try {
+    window.localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(filters));
+  } catch (e) {
+    // saqlab bo'lmasa jim o'tkazamiz
+  }
+}
+
+function loadCarIdFromStorage() {
+  try {
+    return window.localStorage.getItem(LS_CAR_KEY) || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function saveCarIdToStorage(carId) {
+  try {
+    if (carId) {
+      window.localStorage.setItem(LS_CAR_KEY, carId);
+    } else {
+      window.localStorage.removeItem(LS_CAR_KEY);
+    }
+  } catch (e) {
+    // saqlab bo'lmasa jim o'tkazamiz
+  }
+}
 
 const EMPTY_NEW_ROW = {
   date: getTodayDate(),
@@ -577,22 +657,32 @@ function FilterBar({
           ))}
         </Select>
       )}
-      <Input
-        type="date"
-        value={filters.date_from}
-        onChange={(e) => onChange({ date_from: e.target.value })}
-        maxW="170px"
+      <Select
+        value={filters.year}
+        onChange={(e) => onChange({ year: Number(e.target.value) })}
+        maxW="110px"
         size="sm"
         {...inputStyles}
-      />
-      <Input
-        type="date"
-        value={filters.date_to}
-        onChange={(e) => onChange({ date_to: e.target.value })}
-        maxW="170px"
+      >
+        {getYearOptions().map((y) => (
+          <option key={y} value={y}>
+            {y}
+          </option>
+        ))}
+      </Select>
+      <Select
+        value={filters.month}
+        onChange={(e) => onChange({ month: Number(e.target.value) })}
+        maxW="150px"
         size="sm"
         {...inputStyles}
-      />
+      >
+        {MONTH_NAMES_UZ.map((name, idx) => (
+          <option key={idx + 1} value={idx + 1}>
+            {name}
+          </option>
+        ))}
+      </Select>
       {trailing}
     </Flex>
   );
@@ -999,6 +1089,7 @@ function NewRowInline({
   fuelTypesById,
   disabled,
   selectedCarId,
+  dateAlreadyUsed,
 }) {
   const rowBg = useColorModeValue("primary.50", "whiteAlpha.100");
   const rowBorder = useColorModeValue("primary.100", "whiteAlpha.200");
@@ -1027,11 +1118,10 @@ function NewRowInline({
       : null;
   const isValid =
     !disabled &&
+    !dateAlreadyUsed &&
     newRow.date &&
     newRow.fuel_id &&
-    newRow.odometer_start !== "" &&
-    hasDistance &&
-    newRow.received_amount !== "";
+    newRow.odometer_start !== "";
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
@@ -1044,6 +1134,11 @@ function NewRowInline({
           isDisabled={disabled}
           {...inputStyles}
         />
+        {dateAlreadyUsed && (
+          <Text color="red.400" fontSize="xs" mt={1}>
+            Bu kunga allaqachon yozuv kiritilgan
+          </Text>
+        )}
       </Td>
       <Td borderColor="border">
         {fuelTypesLoading ? (
@@ -1415,6 +1510,17 @@ function DataRow({
 function TotalsSummaryTable({ totals }) {
   if (!totals || totals.length === 0) return null;
 
+  // barcha yoqilg'i turlari bo'yicha umumiy yig'indi ("Jami" qatori)
+  const grandTotal = totals.reduce(
+    (acc, t) => ({
+      received: acc.received + (Number(t.totalReceived) || 0),
+      expense: acc.expense + (Number(t.totalExpense) || 0),
+      mileage: acc.mileage + (Number(t.totalMileage) || 0),
+      sum: acc.sum + (Number(t.totalSum) || 0),
+    }),
+    { received: 0, expense: 0, mileage: 0, sum: 0 },
+  );
+
   return (
     <Box
       bg="surface"
@@ -1461,6 +1567,60 @@ function TotalsSummaryTable({ totals }) {
             </Tr>
           </Thead>
           <Tbody>
+            <Tr bg="primaryBg" _hover={{ bg: "primaryBg" }}>
+              <Td
+                borderColor="border"
+                borderLeftWidth="4px"
+                borderLeftColor="primary.500"
+              >
+                <Text fontWeight="extrabold" color="text" fontSize="sm">
+                  Jami
+                </Text>
+              </Td>
+              <Td
+                isNumeric
+                borderColor="border"
+                fontWeight="extrabold"
+                color="text"
+              >
+                {formatNumber(grandTotal.received)}
+              </Td>
+              <Td
+                isNumeric
+                borderColor="border"
+                fontWeight="extrabold"
+                color="text"
+              >
+                {formatNumber(grandTotal.expense)}
+              </Td>
+              <Td
+                isNumeric
+                borderColor="border"
+                fontWeight="extrabold"
+                color="text"
+              >
+                {formatNumber(grandTotal.mileage)} km
+              </Td>
+              <Td
+                isNumeric
+                borderColor="border"
+                fontWeight="extrabold"
+                color="text"
+              >
+                {formatNumber(grandTotal.sum)} so'm
+              </Td>
+              <Td isNumeric borderColor="border">
+                <Badge
+                  colorScheme="primary"
+                  borderRadius="md"
+                  px={2}
+                  py={0.5}
+                  fontWeight="bold"
+                >
+                  {totals.length} turi
+                </Badge>
+              </Td>
+            </Tr>
             {totals.map((total) => {
               const hasBalance =
                 total.currentBalance !== null &&
@@ -1573,6 +1733,8 @@ function ExpenseTable({
   isSavingEdit,
   onDelete,
   selectedCarId,
+  canAddNew,
+  dateAlreadyUsed,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1649,7 +1811,7 @@ function ExpenseTable({
   };
 
   return (
-    <TableContainer w="100%" maxH="calc(100vh - 400px)" overflowY="auto">
+    <TableContainer w="100%">
       <Table variant="simple" size="sm" w="100%">
         {header}
         <Tbody>
@@ -1669,17 +1831,20 @@ function ExpenseTable({
             </Tr>
           )}
           {!loading && items.map((row, i) => renderRow(row, i))}
-          <NewRowInline
-            newRow={newRow}
-            onChange={onNewRowChange}
-            onAdd={onAddRow}
-            isSaving={isSavingRow}
-            fuelTypes={fuelTypes}
-            fuelTypesLoading={fuelTypesLoading}
-            fuelTypesById={fuelTypesById}
-            disabled={noCarSelected}
-            selectedCarId={selectedCarId}
-          />
+          {canAddNew && (
+            <NewRowInline
+              newRow={newRow}
+              onChange={onNewRowChange}
+              onAdd={onAddRow}
+              isSaving={isSavingRow}
+              fuelTypes={fuelTypes}
+              fuelTypesLoading={fuelTypesLoading}
+              fuelTypesById={fuelTypesById}
+              disabled={noCarSelected}
+              selectedCarId={selectedCarId}
+              dateAlreadyUsed={dateAlreadyUsed}
+            />
+          )}
         </Tbody>
       </Table>
     </TableContainer>
@@ -1769,8 +1934,8 @@ function DeleteConfirmDialog({
 // ---------- defaults ----------
 const DEFAULT_FILTERS = {
   fuel_id: "",
-  date_from: getMonthStartDate(),
-  date_to: getTodayDate(),
+  month: getCurrentMonth(),
+  year: getCurrentYear(),
   sortBy: "date",
   sortOrder: "ASC",
 };
@@ -1781,7 +1946,10 @@ const DEFAULT_FILTERS = {
 function CostPage() {
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
-  const [selectedCarId, setSelectedCarId] = useState("");
+  // tanlangan mashina localStorage'dan tiklanadi
+  const [selectedCarId, setSelectedCarId] = useState(() =>
+    loadCarIdFromStorage(),
+  );
   const [showCards, setShowCards] = useState(false);
 
   const loadCars = useCallback(async () => {
@@ -1801,9 +1969,14 @@ function CostPage() {
       const raw = extractList(response?.data);
       const normalized = raw.map(normalizeCar);
       setCars(normalized);
-      if (normalized.length === 1) {
-        setSelectedCarId(normalized[0].id);
-      }
+      // agar localStorage'dagi mashina hozirgi ro'yxatda mavjud bo'lmasa, tozalaymiz;
+      // agar hech qanday tanlov bo'lmasa va faqat bitta mashina bo'lsa, uni tanlaymiz
+      setSelectedCarId((prev) => {
+        if (prev && normalized.some((c) => c.id === prev)) return prev;
+        if (!prev && normalized.length === 1) return normalized[0].id;
+        if (prev && !normalized.some((c) => c.id === prev)) return "";
+        return prev;
+      });
     } catch (err) {
       toastService.error(
         "Mashinalar ro'yxatini yuklab bo'lmadi: " + err.message,
@@ -1818,12 +1991,26 @@ function CostPage() {
     loadCars();
   }, [loadCars]);
 
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  // tanlangan mashina o'zgarganda localStorage'ga saqlaymiz
+  useEffect(() => {
+    saveCarIdToStorage(selectedCarId);
+  }, [selectedCarId]);
+
+  // filtrlar (oy, yil, yoqilg'i turi) localStorage'dan tiklanadi
+  const [filters, setFilters] = useState(() => {
+    const stored = loadFiltersFromStorage();
+    return stored ? { ...DEFAULT_FILTERS, ...stored } : DEFAULT_FILTERS;
+  });
   const [expenses, setExpenses] = useState([]);
   const [totals, setTotals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fuelTypes, setFuelTypes] = useState([]);
   const [fuelTypesLoading, setFuelTypesLoading] = useState(true);
+
+  // filtrlar o'zgarganda localStorage'ga saqlaymiz
+  useEffect(() => {
+    saveFiltersToStorage(filters);
+  }, [filters]);
 
   const fuelTypesById = useMemo(() => {
     const map = {};
@@ -1851,11 +2038,37 @@ function CostPage() {
     loadFuelTypes();
   }, [loadFuelTypes]);
 
-  const [newRow, setNewRow] = useState({
+  const [newRow, setNewRow] = useState(() => ({
     ...EMPTY_NEW_ROW,
-    date: getTodayDate(),
-  });
+    date: getMonthStartDateFor(filters.year, filters.month),
+  }));
   const [isSavingRow, setIsSavingRow] = useState(false);
+
+  // tanlangan filtr (oy/yil) joriy oy bilan bir xilmi — faqat joriy oyda
+  // yangi xarajat qo'shish ko'rsatiladi, o'tgan oylarda "qo'shish" qatori yashiriladi
+  const isCurrentMonthSelected =
+    filters.year === getCurrentYear() && filters.month === getCurrentMonth();
+
+  // tanlangan oy ichida allaqachon mavjud bo'lgan sanalar to'plami —
+  // bir kunga ikkinchi marta xarajat qo'shishning oldini olish uchun
+  const existingDatesSet = useMemo(() => {
+    const set = new Set();
+    expenses.forEach((e) => {
+      if (e?.date) set.add(String(e.date).slice(0, 10));
+    });
+    return set;
+  }, [expenses]);
+
+  const newRowDateAlreadyUsed = existingDatesSet.has(newRow.date);
+
+  // filtrdagi oy/yil o'zgarganda darhol oyning 1-kuniga o'rnatamiz;
+  // pastdagi effekt expenses yuklangach buni oxirgi yozuvdan keyingi kunga to'g'irlaydi
+  useEffect(() => {
+    setNewRow((prev) => ({
+      ...prev,
+      date: getMonthStartDateFor(filters.year, filters.month),
+    }));
+  }, [filters.year, filters.month]);
 
   useEffect(() => {
     if (fuelTypes.length && !newRow.fuel_id) {
@@ -1886,7 +2099,7 @@ function CostPage() {
     setEditingId(null);
     setNewRow({
       ...EMPTY_NEW_ROW,
-      date: getTodayDate(),
+      date: getMonthStartDateFor(filters.year, filters.month),
       fuel_id: newRow.fuel_id || (fuelTypes.length > 0 ? fuelTypes[0].id : ""),
     });
   };
@@ -1898,11 +2111,15 @@ function CostPage() {
     }
     setLoading(true);
     try {
+      const { date_from, date_to } = getMonthDateRange(
+        filters.year,
+        filters.month,
+      );
       const data = await apiCost.All(1, FETCH_LIMIT, {
         car_id: selectedCarId,
         fuel_id: filters.fuel_id,
-        date_from: filters.date_from,
-        date_to: filters.date_to,
+        date_from,
+        date_to,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
       });
@@ -1920,11 +2137,25 @@ function CostPage() {
     loadExpenses();
   }, [loadExpenses]);
 
-  // auto-fill odometer start
+  // ------------------------------------------------------------------
+  // AVTOMATIK "boshlang'ich spidometr" (odometer_start) — TUZATILDI:
+  // Bu qiymat foydalanuvchi tomonidan qo'lda kiritilmaydi (faqat
+  // AutoCell orqali ko'rsatiladi), shuning uchun uni har safar
+  // `expenses` ro'yxati o'zgarganda (yangi yozuv qo'shilganda,
+  // tahrirlanganda yoki o'chirilganda) qayta hisoblash xavfsiz.
+  //
+  // OLDIN: faqat `newRow.odometer_start === ""` bo'lganda hisoblanardi,
+  // shuning uchun bir marta hisoblab bo'lgach eski (noto'g'ri) qiymatda
+  // "qotib" qolar edi — masalan, avval 60 km bilan yozuv qo'shilib,
+  // keyin o'sha yozuv 40 km ga tahrirlansa ham, "qo'shish" qatoridagi
+  // boshlang'ich spidometr hali ham eski (60 km asosidagi) qiymatda
+  // qolib, keyingi masofa noto'g'ri (go'yo 60+40 kabi) hisoblanardi.
+  // ------------------------------------------------------------------
   useEffect(() => {
     if (!selectedCarId) return;
     if (loading) return;
-    if (newRow.odometer_start !== "") return;
+
+    let computedStart = null;
 
     if (expenses && expenses.length > 0) {
       const latest = expenses.reduce((a, b) => {
@@ -1933,22 +2164,61 @@ function CostPage() {
         return db > da ? b : a;
       });
       if (latest?.odometer_end !== undefined && latest?.odometer_end !== null) {
-        setNewRow((prev) => ({
-          ...prev,
-          odometer_start: String(latest.odometer_end),
-        }));
+        computedStart = String(latest.odometer_end);
+      }
+    }
+
+    if (computedStart === null) {
+      const car = cars.find((c) => c.id === selectedCarId);
+      if (car?.odometer !== undefined && car?.odometer !== null) {
+        computedStart = String(car.odometer);
+      }
+    }
+
+    if (computedStart !== null) {
+      setNewRow((prev) =>
+        prev.odometer_start === computedStart
+          ? prev
+          : { ...prev, odometer_start: computedStart },
+      );
+    }
+  }, [selectedCarId, expenses, loading, cars]);
+
+  // auto-fill sana: shu oy uchun oxirgi yozuvdan keyingi kun (yozuv yo'q bo'lsa — 1-sana)
+  useEffect(() => {
+    if (!selectedCarId) return;
+    if (loading) return;
+
+    if (expenses && expenses.length > 0) {
+      const latest = expenses.reduce((a, b) => {
+        const da = new Date(a.date).getTime() || 0;
+        const db = new Date(b.date).getTime() || 0;
+        return db > da ? b : a;
+      });
+      if (latest?.date) {
+        const nextDate = new Date(latest.date);
+        nextDate.setDate(nextDate.getDate() + 1);
+        // keyingi kun tanlangan oy/yildan chiqib ketsa (masalan iyun to'lgan),
+        // tanlangan oy ichida qolamiz — oyning oxirgi kunida turaveradi,
+        // yangi oy (masalan iyul) faqat select orqali tanlanganda paydo bo'ladi
+        const withinSelectedMonth =
+          nextDate.getFullYear() === filters.year &&
+          nextDate.getMonth() + 1 === filters.month;
+        const nextDateStr = withinSelectedMonth
+          ? formatAsInputDate(nextDate)
+          : formatAsInputDate(new Date(filters.year, filters.month, 0));
+        setNewRow((prev) =>
+          prev.date === nextDateStr ? prev : { ...prev, date: nextDateStr },
+        );
         return;
       }
     }
 
-    const car = cars.find((c) => c.id === selectedCarId);
-    if (car?.odometer !== undefined && car?.odometer !== null) {
-      setNewRow((prev) => ({
-        ...prev,
-        odometer_start: String(car.odometer),
-      }));
-    }
-  }, [selectedCarId, expenses, loading, cars, newRow.odometer_start]);
+    const monthStartStr = getMonthStartDateFor(filters.year, filters.month);
+    setNewRow((prev) =>
+      prev.date === monthStartStr ? prev : { ...prev, date: monthStartStr },
+    );
+  }, [selectedCarId, expenses, loading, filters.year, filters.month]);
 
   const handleAddRow = async () => {
     if (!selectedCarId) {
@@ -1956,15 +2226,9 @@ function CostPage() {
       return;
     }
 
-    if (
-      !newRow.date ||
-      !newRow.fuel_id ||
-      newRow.odometer_start === "" ||
-      newRow.distance === "" ||
-      newRow.received_amount === ""
-    ) {
+    if (!newRow.date || !newRow.fuel_id || newRow.odometer_start === "") {
       toastService.error(
-        "Barcha maydonlarni to'ldiring: Sana, yoqilg'i turi, necha km yurgan va olingan miqdor kerak",
+        "Barcha maydonlarni to'ldiring: Sana, yoqilg'i turi va boshlang'ich spidometr kerak",
       );
       return;
     }
@@ -1976,13 +2240,24 @@ function CostPage() {
       return;
     }
 
-    if (Number(newRow.distance) <= 0) {
-      toastService.error("Yurgan km 0 dan katta bo'lishi kerak");
+    // bir kunga faqat bitta xarajat yozuvi kiritilishi mumkin
+    if (
+      expenses.some((e) => String(e?.date || "").slice(0, 10) === newRow.date)
+    ) {
+      toastService.error(
+        "Bu sanaga allaqachon xarajat kiritilgan. Bir kunga faqat bitta yozuv qo'shish mumkin.",
+      );
+      return;
+    }
+
+    if (newRow.distance !== "" && Number(newRow.distance) < 0) {
+      toastService.error("Yurgan km manfiy bo'lishi mumkin emas");
       return;
     }
 
     const odometerStart = Number(newRow.odometer_start);
-    const odometerEnd = odometerStart + Number(newRow.distance);
+    const distanceValue = newRow.distance === "" ? 0 : Number(newRow.distance);
+    const odometerEnd = odometerStart + distanceValue;
 
     setIsSavingRow(true);
     const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
@@ -1994,7 +2269,9 @@ function CostPage() {
         date: newRow.date,
         odometer_start: odometerStart,
         odometer_end: odometerEnd,
-        received_amount: Number(newRow.received_amount),
+        distance: distanceValue,
+        received_amount:
+          newRow.received_amount === "" ? 0 : Number(newRow.received_amount),
         is_holiday: newRow.is_holiday,
         note: "",
       });
@@ -2007,9 +2284,18 @@ function CostPage() {
       toastService.dismiss(loadingToastId);
       toastService.success("Yangi xarajat qo'shildi");
 
+      const enteredDate = new Date(newRow.date);
+      enteredDate.setDate(enteredDate.getDate() + 1);
+      const enteredWithinSelectedMonth =
+        enteredDate.getFullYear() === filters.year &&
+        enteredDate.getMonth() + 1 === filters.month;
+      const nextDateStr = enteredWithinSelectedMonth
+        ? formatAsInputDate(enteredDate)
+        : formatAsInputDate(new Date(filters.year, filters.month, 0));
+
       setNewRow({
         ...EMPTY_NEW_ROW,
-        date: getTodayDate(),
+        date: nextDateStr,
         fuel_id: newRow.fuel_id,
         odometer_start: String(odometerEnd),
       });
@@ -2024,14 +2310,15 @@ function CostPage() {
   };
 
   const startEdit = (row) => {
-    const start = Number(row.odometer_start) || 0;
-    const end = Number(row.odometer_end) || 0;
     setEditingId(row.id);
     setEditForm({
       date: row.date?.slice(0, 10) || "",
       fuel_id: row.fuel_id,
       odometer_start: row.odometer_start ?? "",
-      distance: end > start ? String(end - start) : "",
+      distance:
+        row.distance !== undefined && row.distance !== null
+          ? String(row.distance)
+          : "",
       received_amount: row.received_amount || "",
       is_holiday: !!row.is_holiday,
     });
@@ -2076,6 +2363,7 @@ function CostPage() {
       const response = await apiCost.Update(editingId, {
         odometer_start: odometerStart,
         odometer_end: odometerEnd,
+        distance: Number(editForm.distance),
         received_amount: Number(editForm.received_amount),
         is_holiday: editForm.is_holiday,
       });
@@ -2130,10 +2418,9 @@ function CostPage() {
       return;
     }
 
-    // filters.date_from dan yil va oyni olamiz (backend "year" va "month" so'raydi)
-    const refDate = new Date(filters.date_from || getTodayDate());
-    const year = refDate.getFullYear();
-    const month = refDate.getMonth() + 1;
+    // filtrlardagi oy/yildan foydalanamiz (backend "year" va "month" so'raydi)
+    const year = filters.year;
+    const month = filters.month;
 
     setIsExporting(true);
     try {
@@ -2263,6 +2550,8 @@ function CostPage() {
           isSavingEdit={isSavingEdit}
           onDelete={askDelete}
           selectedCarId={selectedCarId}
+          canAddNew={isCurrentMonthSelected}
+          dateAlreadyUsed={newRowDateAlreadyUsed}
         />
       </Box>
 
