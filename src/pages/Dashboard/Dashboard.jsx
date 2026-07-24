@@ -247,6 +247,9 @@ function Dashboard() {
   const tableHoverBg = useColorModeValue("gray.50", "gray.700");
   const borderColor = useColorModeValue("gray.200", "gray.700");
   const fuelHeaderBg = useColorModeValue("gray.50", "gray.900");
+  // guruhlar orasidagi ajratuvchi (qalinroq) chiziq rangi
+  const groupDividerColor = useColorModeValue("gray.400", "gray.500");
+  const groupDividerWidth = "2px";
 
   const tooltipContentStyle = {
     borderRadius: "10px",
@@ -480,7 +483,7 @@ function Dashboard() {
 
   const totalPages = Math.ceil(orgReportTotal / orgReportLimit) || 1;
 
-  // Jadval ustunlari
+  // Jadval ustunlari (har bir yoqilg'i turi uchun bitta ustun guruhi)
   const fuelColumns = useMemo(() => {
     const map = new Map();
     orgReportData.forEach((row) => {
@@ -507,6 +510,18 @@ function Dashboard() {
       0,
     );
   }
+
+  // Jadvaldagi umumiy ustunlar soni (colSpan hisoblash uchun):
+  // Mashina, Haydovchi, Mas'ul shaxs, Masofa, Umumiy summasi = 5 ta doimiy ustun
+  // + har bir yoqilg'i turi uchun 4 tadan ustun (boshi, sarf miqdori, sarf summasi, oxiri)
+  const fuelGroupCount = fuelColumns.length || 1;
+  const totalColSpan = 5 + fuelColumns.length * 4;
+
+  // guruh chegarasidagi ustunga qalinroq chap chiziq berish uchun umumiy props
+  const groupDividerProps = {
+    borderLeftWidth: groupDividerWidth,
+    borderLeftColor: groupDividerColor,
+  };
 
   return (
     <Box p={{ base: 4, md: 6 }} bg={pageBg} minH="100vh">
@@ -698,63 +713,99 @@ function Dashboard() {
                   >
                     Masofa (km)
                   </Th>
-                  {fuelColumns.map((f) => (
-                    <Th
-                      key={f.fuel_id}
-                      colSpan={4}
-                      textAlign="center"
-                      color={headingColor}
-                      borderColor={borderColor}
-                      bg={fuelHeaderBg}
-                    >
-                      {f.fuel_name}
-                    </Th>
-                  ))}
+
+                  {/* --- OY BOSHIDAGI QOLDIQ (har bir yoqilg'i turi bo'yicha) --- */}
+                  <Th
+                    colSpan={fuelGroupCount}
+                    textAlign="center"
+                    color={headingColor}
+                    borderColor={borderColor}
+                    bg={fuelHeaderBg}
+                    {...groupDividerProps}
+                  >
+                    Oy boshidagi qoldiq
+                  </Th>
+
+                  {/* --- OY DAVOMIDA SARFLANGAN (miqdor + summa, har bir yoqilg'i turi bo'yicha) --- */}
+                  <Th
+                    colSpan={fuelGroupCount * 2}
+                    textAlign="center"
+                    color={headingColor}
+                    borderColor={borderColor}
+                    bg={fuelHeaderBg}
+                    {...groupDividerProps}
+                  >
+                    Oy davomida sarflangan
+                  </Th>
+
                   <Th
                     rowSpan={2}
                     color={subTextColor}
                     borderColor={borderColor}
                     verticalAlign="bottom"
+                    {...groupDividerProps}
                   >
-                    Jami xarajat
+                    Umumiy summasi
+                  </Th>
+
+                  {/* --- OY OXIRIDAGI QOLDIQ (har bir yoqilg'i turi bo'yicha) --- */}
+                  <Th
+                    colSpan={fuelGroupCount}
+                    textAlign="center"
+                    color={headingColor}
+                    borderColor={borderColor}
+                    bg={fuelHeaderBg}
+                    {...groupDividerProps}
+                  >
+                    Oy oxiridagi qoldiq
                   </Th>
                 </Tr>
                 <Tr>
-                  {fuelColumns.map((f) => (
+                  {/* Boshidagi qoldiq - har bir yoqilg'i */}
+                  {fuelColumns.map((f, idx) => (
+                    <Th
+                      key={`start-${f.fuel_id}`}
+                      color={subTextColor}
+                      borderColor={borderColor}
+                      fontSize="10px"
+                      {...(idx === 0 ? groupDividerProps : {})}
+                    >
+                      {f.fuel_name} ({f.fuel_unit})
+                    </Th>
+                  ))}
+                  {/* Sarflangan miqdor va summa - har bir yoqilg'i */}
+                  {fuelColumns.map((f, idx) => (
                     <>
                       <Th
-                        key={`${f.fuel_id}-start`}
+                        key={`consumed-${f.fuel_id}`}
                         color={subTextColor}
                         borderColor={borderColor}
                         fontSize="10px"
+                        {...(idx === 0 ? groupDividerProps : {})}
                       >
-                        Boshi ({f.fuel_unit})
+                        {f.fuel_name} sarfi ({f.fuel_unit})
                       </Th>
                       <Th
-                        key={`${f.fuel_id}-consumed`}
+                        key={`sum-${f.fuel_id}`}
                         color={subTextColor}
                         borderColor={borderColor}
                         fontSize="10px"
                       >
-                        Sarf ({f.fuel_unit})
-                      </Th>
-                      <Th
-                        key={`${f.fuel_id}-sum`}
-                        color={subTextColor}
-                        borderColor={borderColor}
-                        fontSize="10px"
-                      >
-                        Summa
-                      </Th>
-                      <Th
-                        key={`${f.fuel_id}-end`}
-                        color={subTextColor}
-                        borderColor={borderColor}
-                        fontSize="10px"
-                      >
-                        Qoldiqi ({f.fuel_unit})
+                        {f.fuel_name} summasi
                       </Th>
                     </>
+                  ))}
+                  {/* Oxirgi qoldiq - har bir yoqilg'i */}
+                  {fuelColumns.map((f, idx) => (
+                    <Th
+                      key={`end-${f.fuel_id}`}
+                      color={subTextColor}
+                      borderColor={borderColor}
+                      fontSize="10px"
+                      {...(idx === 0 ? groupDividerProps : {})}
+                    >
+                      {f.fuel_name} ({f.fuel_unit})
+                    </Th>
                   ))}
                 </Tr>
               </Thead>
@@ -762,10 +813,7 @@ function Dashboard() {
                 {orgReportLoading ? (
                   [...Array(orgReportLimit)].map((_, i) => (
                     <Tr key={i}>
-                      <Td
-                        colSpan={5 + fuelColumns.length * 4}
-                        borderColor={borderColor}
-                      >
+                      <Td colSpan={totalColSpan} borderColor={borderColor}>
                         <Skeleton h="20px" w="full" />
                       </Td>
                     </Tr>
@@ -773,7 +821,7 @@ function Dashboard() {
                 ) : orgReportData.length === 0 ? (
                   <Tr>
                     <Td
-                      colSpan={5 + fuelColumns.length * 4}
+                      colSpan={totalColSpan}
                       textAlign="center"
                       color={emptyTextColor}
                       py={8}
@@ -796,50 +844,71 @@ function Dashboard() {
                       <Td borderColor={borderColor} color={headingColor}>
                         {formatNumberSimple(row.total_mileage)} km
                       </Td>
-                      {fuelColumns.map((f) => {
+
+                      {/* Boshidagi qoldiq - har bir yoqilg'i */}
+                      {fuelColumns.map((f, fIdx) => {
+                        const rf = getRowFuel(row, f.fuel_id);
+                        return (
+                          <Td
+                            key={`start-${f.fuel_id}`}
+                            borderColor={borderColor}
+                            color={headingColor}
+                            {...(fIdx === 0 ? groupDividerProps : {})}
+                          >
+                            {rf ? formatNumberSimple(rf.start_balance) : "-"}
+                          </Td>
+                        );
+                      })}
+
+                      {/* Sarflangan miqdor va summa - har bir yoqilg'i */}
+                      {fuelColumns.map((f, fIdx) => {
                         const rf = getRowFuel(row, f.fuel_id);
                         return (
                           <>
                             <Td
-                              key={`${f.fuel_id}-start`}
+                              key={`consumed-${f.fuel_id}`}
                               borderColor={borderColor}
                               color={headingColor}
-                            >
-                              {rf ? formatNumberSimple(rf.start_balance) : "-"}
-                            </Td>
-                            <Td
-                              key={`${f.fuel_id}-consumed`}
-                              borderColor={borderColor}
-                              color={headingColor}
+                              {...(fIdx === 0 ? groupDividerProps : {})}
                             >
                               {rf
                                 ? formatNumberSimple(rf.consumed_amount)
                                 : "-"}
                             </Td>
                             <Td
-                              key={`${f.fuel_id}-sum`}
+                              key={`sum-${f.fuel_id}`}
                               borderColor={borderColor}
                               color={headingColor}
                             >
                               {rf ? formatSum(rf.consumed_sum) : "-"}
                             </Td>
-                            <Td
-                              key={`${f.fuel_id}-end`}
-                              borderColor={borderColor}
-                              color={headingColor}
-                            >
-                              {rf ? formatNumberSimple(rf.end_balance) : "-"}
-                            </Td>
                           </>
                         );
                       })}
+
                       <Td
                         borderColor={borderColor}
                         color={headingColor}
                         fontWeight="semibold"
+                        {...groupDividerProps}
                       >
                         {formatSum(rowTotalSum(row))}
                       </Td>
+
+                      {/* Oxirgi qoldiq - har bir yoqilg'i */}
+                      {fuelColumns.map((f, fIdx) => {
+                        const rf = getRowFuel(row, f.fuel_id);
+                        return (
+                          <Td
+                            key={`end-${f.fuel_id}`}
+                            borderColor={borderColor}
+                            color={headingColor}
+                            {...(fIdx === 0 ? groupDividerProps : {})}
+                          >
+                            {rf ? formatNumberSimple(rf.end_balance) : "-"}
+                          </Td>
+                        );
+                      })}
                     </Tr>
                   ))
                 )}
