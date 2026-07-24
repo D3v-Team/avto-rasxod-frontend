@@ -39,7 +39,7 @@ class apiAdmin {
 
   // Admin yaratish
   static Create = async (data) => {
-    const response = await $api.post("/user/admin", data);
+    const response = await $api.post("/user", data);
     return response.data;
   };
 
