@@ -5,31 +5,36 @@ class apiCars {
         CARS
   ========================== */
 
-  static All = async (
-    page = 1,
-    limit = 10,
-    search = "",
-    is_active,
-    responsible_employee_id = "",
-    driver_id = "",
-    sortBy = "",
-    sortOrder = "",
-  ) => {
-    const params = { page, limit };
-
-    if (search) params.search = search;
-    if (is_active !== undefined && is_active !== null)
-      params.is_active = is_active;
-    if (responsible_employee_id)
-      params.responsible_employee_id = responsible_employee_id;
-    if (driver_id) params.driver_id = driver_id;
-    if (sortBy) params.sortBy = sortBy;
-    if (sortOrder) params.sortOrder = sortOrder;
-
-    const response = await $api.get(`${BASE_URL}/cars`, { params });
-    return response;
+ static All = async (
+  page = 1,
+  limit = 10,
+  search = "",
+  is_active,
+  is_deleted = false,
+  responsible_employee_id = "",
+  driver_id = "",
+  sortBy = "",
+  sortOrder = "",
+) => {
+  const params = {
+    page,
+    limit,
+    is_deleted,
   };
 
+  if (search) params.search = search;
+  if (is_active !== undefined && is_active !== null)
+    params.is_active = is_active;
+  if (responsible_employee_id)
+    params.responsible_employee_id = responsible_employee_id;
+  if (driver_id) params.driver_id = driver_id;
+  if (sortBy) params.sortBy = sortBy;
+  if (sortOrder) params.sortOrder = sortOrder;
+
+  const response = await $api.get(`${BASE_URL}/cars`, { params });
+
+  return response;
+};
   static One = async (id) => {
     const response = await $api.get(`${BASE_URL}/cars/${id}`);
     return response;
@@ -37,7 +42,7 @@ class apiCars {
 
   static Create = async (data) => {
     const response = await $api.post(`${BASE_URL}/cars`, data, {
-      showSuccessToast: "Car successfully created",
+      showSuccessToast: "Avtomobil muvaffaqiyatli yaratildi",
     });
 
     return response;
@@ -45,7 +50,8 @@ class apiCars {
 
   static Update = async (id, data) => {
     const response = await $api.patch(`${BASE_URL}/cars/${id}`, data, {
-      showSuccessToast: "Car successfully updated",
+      showSuccessToast: "Avtomobil ma'lumotlari muvaffaqiyatli yangilandi",
+      showErrorToast:"Bunday raqamli avtomobil bazada mavjud !"
     });
 
     return response;
@@ -53,7 +59,7 @@ class apiCars {
 
   static Delete = async (id) => {
     const response = await $api.delete(`${BASE_URL}/cars/${id}`, {
-      showSuccessToast: "Car successfully deleted",
+      showSuccessToast: "Avtomobil muvaffaqiyatli o'chirildi",
     });
 
     return response;
@@ -93,7 +99,7 @@ class apiCars {
 
   static CreateNorm = async (data) => {
     const response = await $api.post(`${BASE_URL}/car-fuel-norms`, data, {
-      showSuccessToast: "Fuel norm successfully created",
+      showSuccessToast: "Yoqilg'i normasi muvaffaqiyatli yaratildi",
     });
 
     return response;
@@ -104,7 +110,7 @@ class apiCars {
       `${BASE_URL}/car-fuel-norms/${id}`,
       data,
       {
-        showSuccessToast: "Fuel norm successfully updated",
+        showSuccessToast: "Yoqilg'i normasi muvaffaqiyatli yangilandi",
       },
     );
 
@@ -113,7 +119,7 @@ class apiCars {
 
   static DeleteNorm = async (id) => {
     const response = await $api.delete(`${BASE_URL}/car-fuel-norms/${id}`, {
-      showSuccessToast: "Fuel norm successfully deleted",
+      showSuccessToast: "Yoqilg'i normasi muvaffaqiyatli o'chirildi",
     });
 
     return response;

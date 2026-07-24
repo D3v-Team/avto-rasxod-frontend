@@ -406,10 +406,7 @@ export default function FuelPage() {
                   <option value="m3">Kub metr (m³)</option>
                   <option value="kwh">Kilovatt-soat (kWh)</option>
 
-                  {formData.unit &&
-                    !["litr", "m³", "kg"].includes(formData.unit) && (
-                      <option value={formData.unit}>{formData.unit}</option>
-                    )}
+                 
                 </Select>
               </FormControl>
 
