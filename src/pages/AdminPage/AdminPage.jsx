@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Box,
   Card,
@@ -29,7 +29,6 @@ import {
   FormLabel,
   Select,
   useDisclosure,
-  useToast,
   Avatar,
   Tooltip,
   Spinner,
@@ -37,24 +36,44 @@ import {
   HStack,
   VStack,
 } from "@chakra-ui/react";
-import { Search, Plus, Pencil, Trash2, Users } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { apiEmployees } from "../../Services/api/Users";
+import toast from "react-hot-toast";
 
-// Yagona brend rangi
 const ACCENT = "#3B82F6";
-
-// Boshlang'ich holat
+const ITEMS_PER_PAGE = 10;
 const emptyForm = { fullName: "", phone: "", role: "driver" };
 
 export default function AdminPage() {
   const [admins, setAdmins] = useState([]);
+  
+  // Yuklanish holatlari (CarPage bilan bir xil logic)
   const [loading, setLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+
+  // Pagination holatlari
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
+
+  // Smooth yuklanish uchun Ref'lar
+  const hasLoadedOnceRef = useRef(false);
+  const fetchIdRef = useRef(0);
+  const didMountRef = useRef(false);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
@@ -63,14 +82,25 @@ export default function AdminPage() {
     onClose: onDeleteClose,
   } = useDisclosure();
 
-  const toast = useToast();
+  // Backenddan xodimlarni yuklash (Background Fetch)
+  const fetchEmployees = async (targetPage = currentPage, searchQuery = search) => {
+    const fetchId = ++fetchIdRef.current;
 
-  // Backenddan xodimlarni yuklash
-  const fetchEmployees = async () => {
-    setLoading(true);
+    // Birinchi marta kirganda Spinner, keyingilarida background fetching (isFetching)
+    if (!hasLoadedOnceRef.current) {
+      setLoading(true);
+    } else {
+      setIsFetching(true);
+    }
+
     try {
-      const res = await apiEmployees.All();
-      const rawData = res.data?.data || res.data || [];
+      const res = await apiEmployees.All("", searchQuery, targetPage, ITEMS_PER_PAGE);
+
+      if (fetchIdRef.current !== fetchId) return; // Eski so'rov bo'lsa to'xtatamiz
+
+      const responseData = res.data?.data || res.data || {};
+      const rawData = responseData.records || (Array.isArray(responseData) ? responseData : []);
+      const paginationData = responseData.pagination || {};
 
       const mappedAdmins = rawData.map((emp) => ({
         id: emp.id,
@@ -80,28 +110,67 @@ export default function AdminPage() {
       }));
 
       setAdmins(mappedAdmins);
+
+      const total = paginationData.total_count || responseData.total || mappedAdmins.length;
+      const pages = paginationData.total_pages || responseData.totalPages || Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
+
+      setTotalItems(total);
+      setServerTotalPages(pages);
+
+      if (mappedAdmins.length === 0 && targetPage > 1 && targetPage > pages) {
+        setCurrentPage(pages);
+      }
     } catch (error) {
+      if (fetchIdRef.current !== fetchId) return;
       console.error("Xodimlarni yuklashda xatolik:", error);
-      toast({
-        title: "Ma'lumotlarni yuklab bo'lmadi",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
+      toast.error("Ma'lumotlarni yuklab bo'lmadi");
     } finally {
-      setLoading(false);
+      if (fetchIdRef.current === fetchId) {
+        setLoading(false);
+        setIsFetching(false);
+        hasLoadedOnceRef.current = true;
+      }
     }
   };
 
+  // Search va Page o'zgarganda yuklash
   useEffect(() => {
-    fetchEmployees();
-  }, []);
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      fetchEmployees(currentPage, search);
+      return;
+    }
 
-  const filteredAdmins = admins.filter(
-    (a) =>
-      (a.fullName?.toLowerCase() || "").includes(search.toLowerCase()) ||
-      (a.phone?.toLowerCase() || "").includes(search.toLowerCase()),
-  );
+    const timer = setTimeout(() => {
+      fetchEmployees(currentPage, search);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [search, currentPage]);
+
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+    setCurrentPage(1);
+  };
+
+  // Pagination hisob-kitoblari (CarPage bilan bir xil)
+  const totalPages = useMemo(() => Math.max(1, serverTotalPages), [serverTotalPages]);
+  const safeCurrentPage = useMemo(() => Math.min(currentPage, totalPages), [currentPage, totalPages]);
+
+  const goToPage = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
+
+  const pageNumbers = useMemo(() => {
+    const pages = [];
+    const maxVisible = 3;
+    let start = Math.max(1, safeCurrentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    start = Math.max(1, end - maxVisible + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  }, [safeCurrentPage, totalPages]);
 
   function openCreateModal() {
     setForm(emptyForm);
@@ -119,12 +188,9 @@ export default function AdminPage() {
     onOpen();
   }
 
-  // Xodim yaratish yoki Yangilash
   async function handleSave(e) {
     e?.preventDefault();
-    if (!form.fullName.trim() || !form.phone.trim()) {
-      return;
-    }
+    if (!form.fullName.trim() || !form.phone.trim()) return;
 
     setIsSubmitting(true);
 
@@ -141,7 +207,9 @@ export default function AdminPage() {
         await apiEmployees.Create(payload);
       }
       onClose();
-      fetchEmployees();
+      fetchEmployees(currentPage, search);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -158,7 +226,15 @@ export default function AdminPage() {
     try {
       await apiEmployees.Delete(deleteId);
       onDeleteClose();
-      fetchEmployees();
+
+      const nextPage = admins.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+      if (nextPage !== currentPage) {
+        setCurrentPage(nextPage);
+      } else {
+        fetchEmployees(currentPage, search);
+      }
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -205,7 +281,7 @@ export default function AdminPage() {
           </Button>
         </Flex>
 
-        {/* SEARCH + BADGE ROW */}
+        {/* SEARCH + COUNT ROW */}
         <Flex justify="space-between" align="center" gap={4} wrap="wrap" mb={5}>
           <InputGroup maxW="320px">
             <InputLeftElement pointerEvents="none">
@@ -224,21 +300,31 @@ export default function AdminPage() {
                 boxShadow: `0 0 0 3px ${ACCENT}26`,
               }}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={handleSearchChange}
             />
           </InputGroup>
-          <Badge
-            fontSize="xs"
-            px={3}
-            py={1.5}
-            borderRadius="lg"
-            bg="blackAlpha.50"
-            color="textSecondary"
-            border="1px solid"
-            borderColor="border"
-          >
-            Jami: {filteredAdmins.length} ta
-          </Badge>
+
+          {/* YANGILANISH INDIKATORI + BADGE */}
+          <HStack spacing={3}>
+            {isFetching && (
+              <HStack spacing={1.5} color="textSecondary">
+                <Spinner size="xs" color={ACCENT} thickness="2px" />
+                <Text fontSize="xs">Yangilanmoqda...</Text>
+              </HStack>
+            )}
+            <Badge
+              fontSize="xs"
+              px={3}
+              py={1.5}
+              borderRadius="lg"
+              bg="blackAlpha.50"
+              color="textSecondary"
+              border="1px solid"
+              borderColor="border"
+            >
+              Jami: {totalItems} ta
+            </Badge>
+          </HStack>
         </Flex>
 
         {/* TABLE CARD SECTION */}
@@ -260,7 +346,7 @@ export default function AdminPage() {
                   </Text>
                 </VStack>
               </Center>
-            ) : filteredAdmins.length === 0 ? (
+            ) : admins.length === 0 && !isFetching ? (
               <Center py={16}>
                 <VStack spacing={3}>
                   <Users
@@ -274,7 +360,13 @@ export default function AdminPage() {
                 </VStack>
               </Center>
             ) : (
-              <Box overflowX="auto" w="100%">
+              <Box
+                w="100%"
+                overflow="hidden"
+                opacity={isFetching ? 0.55 : 1}
+                pointerEvents={isFetching ? "none" : "auto"}
+                transition="opacity 0.15s ease"
+              >
                 <Table variant="simple" size="md" w="100%">
                   <Thead>
                     <Tr bg="surfBlur">
@@ -317,7 +409,7 @@ export default function AdminPage() {
                     </Tr>
                   </Thead>
                   <Tbody>
-                    {filteredAdmins.map((admin) => (
+                    {admins.map((admin) => (
                       <Tr
                         key={admin.id}
                         transition="background 0.15s ease"
@@ -411,6 +503,78 @@ export default function AdminPage() {
                 </Table>
               </Box>
             )}
+
+            {/* CAR PAGE BILING BIR XIL PAGINATION CONTROLS */}
+            {!loading && totalItems > 0 && (
+              <Flex
+                justify="space-between"
+                align="center"
+                px={6}
+                py={4}
+                borderTop="1px solid"
+                borderColor="border"
+                flexWrap="wrap"
+                gap={3}
+              >
+                <Text fontSize="xs" color="textSecondary">
+                  {(safeCurrentPage - 1) * ITEMS_PER_PAGE + 1}-
+                  {Math.min(safeCurrentPage * ITEMS_PER_PAGE, totalItems)} /{" "}
+                  {totalItems} ta ko'rsatilmoqda
+                </Text>
+
+                <HStack spacing={1.5}>
+                  <IconButton
+                    icon={<ChevronLeft size={16} />}
+                    size="sm"
+                    variant="outline"
+                    borderColor="border"
+                    color="textSecondary"
+                    borderRadius="lg"
+                    aria-label="Oldingi sahifa"
+                    isDisabled={safeCurrentPage === 1}
+                    onClick={() => goToPage(safeCurrentPage - 1)}
+                    _hover={{ bg: "blackAlpha.50", color: "text" }}
+                  />
+
+                  {pageNumbers.map((page) => (
+                    <Button
+                      key={page}
+                      size="sm"
+                      minW="36px"
+                      borderRadius="lg"
+                      fontWeight="600"
+                      fontSize="xs"
+                      bg={page === safeCurrentPage ? ACCENT : "transparent"}
+                      color={
+                        page === safeCurrentPage ? "white" : "textSecondary"
+                      }
+                      border="1px solid"
+                      borderColor={page === safeCurrentPage ? ACCENT : "border"}
+                      _hover={{
+                        bg: page === safeCurrentPage ? ACCENT : "blackAlpha.50",
+                        color: page === safeCurrentPage ? "white" : "text",
+                      }}
+                      onClick={() => goToPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+
+                  <IconButton
+                    icon={<ChevronRight size={16} />}
+                    size="sm"
+                    variant="outline"
+                    borderColor="border"
+                    color="textSecondary"
+                    borderRadius="lg"
+                    aria-label="Keyingi sahifa"
+                    isDisabled={safeCurrentPage === totalPages}
+                    onClick={() => goToPage(safeCurrentPage + 1)}
+                    _hover={{ bg: "blackAlpha.50", color: "text" }}
+                  />
+                </HStack>
+              </Flex>
+            )}
           </CardBody>
         </Card>
       </Box>
@@ -450,7 +614,7 @@ export default function AdminPage() {
                   F.I.Sh
                 </FormLabel>
                 <Input
-                  placeholder="Masalan: Doston Ergashev"
+                  placeholder="Masalan: Ali valiyev"
                   bg="surface"
                   color="text"
                   borderColor="border"
@@ -463,6 +627,7 @@ export default function AdminPage() {
                 />
               </FormControl>
 
+              {/* Telefon */}
               <FormControl isRequired>
                 <FormLabel
                   fontSize="sm"
@@ -472,7 +637,6 @@ export default function AdminPage() {
                   Telefon raqam
                 </FormLabel>
                 <InputGroup>
-                  {/* Chap tomonda permanent +998 prefiksi */}
                   <InputLeftElement pointerEvents="none" w="4.5rem">
                     <Text fontSize="sm" fontWeight="600" color="textSecondary">
                       +998
@@ -486,10 +650,10 @@ export default function AdminPage() {
                     borderColor="border"
                     focusBorderColor="primary"
                     _hover={{ borderColor: ACCENT }}
-                    pl="4.5rem" // Chapdan joy tashlash
-                    value={form.phone.replace("+998", "")} // Agarda form.phone ichida +998 bo'lsa, uni kesib ko'rsatadi
+                    pl="4.5rem"
+                    value={form.phone.replace("+998", "")}
                     onChange={(e) => {
-                      const val = e.target.value.slice(0, 9); // Ko'pi bilan 9 ta raqam
+                      const val = e.target.value.slice(0, 9);
                       setForm({ ...form, phone: `+998${val}` });
                     }}
                   />
