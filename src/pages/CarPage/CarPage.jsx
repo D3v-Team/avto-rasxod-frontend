@@ -54,13 +54,18 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreVertical,
+  PanelLeftRightDashed,
 } from "lucide-react";
 import { apiCars } from "../../Services/api/Cars";
 import { apiEmployees } from "../../Services/api/Users";
 import { apiFuel } from "../../Services/api/Fuels";
+import { generateWaybill } from "../../utils/exel";
+
 import toast from "react-hot-toast";
 
 const ACCENT = "#3B82F6";
+
+
 
 const VALID_REGION_CODES = [
   "01",
@@ -162,6 +167,16 @@ export default function CarPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [serverTotalPages, setServerTotalPages] = useState(1);
+  const [selectedWaybillCar, setSelectedWaybillCar] = useState(null);
+  const [waybillForm, setWaybillForm] = useState({
+    year: new Date().getFullYear(),
+    month: "",
+    number: "",
+    issueDate: "",
+    issueTime: "",
+  });
+  const [isGeneratingWaybill, setIsGeneratingWaybill] = useState(false);
+  const [waybillErrors, setWaybillErrors] = useState({});
 
   const {
     isOpen: isFormOpen,
@@ -179,6 +194,12 @@ export default function CarPage() {
     isOpen: isNormOpen,
     onOpen: onNormOpen,
     onClose: onNormClose,
+  } = useDisclosure();
+
+  const {
+    isOpen: isWaybillOpen,
+    onOpen: onWaybillOpen,
+    onClose: onWaybillClose,
   } = useDisclosure();
 
   const extractRecords = (res) => {
@@ -543,6 +564,54 @@ export default function CarPage() {
     onNormOpen();
   };
 
+  const handleOpenWaybillModal = (car) => {
+    setSelectedWaybillCar(car);
+    setWaybillForm({
+      year: new Date().getFullYear(),
+      month: "",
+      number: "",
+      issueDate: "",
+      issueTime: "",
+    });
+    setWaybillErrors({});
+    onWaybillOpen();
+  };
+
+  const handleCloseWaybillModal = () => {
+    onWaybillClose();
+    setSelectedWaybillCar(null);
+  };
+
+  const handleWaybillChange = (e) => {
+    const { name, value } = e.target;
+    setWaybillForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const validateWaybillForm = () => {
+    const errors = {};
+    if (!selectedWaybillCar?.id) {
+      errors.car = true;
+    }
+    setWaybillErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleGenerateWaybill = async () => {
+    if (!validateWaybillForm()) return;
+
+    setIsGeneratingWaybill(true);
+    try {
+      await generateWaybill(selectedWaybillCar, waybillForm);
+      toast.success("Yo'l varaqasi muvaffaqiyatli yuklab olindi");
+      handleCloseWaybillModal();
+    } catch (error) {
+      console.error("Yo'l varaqasini generatsiya qilishda xatolik:", error);
+      toast.error(error?.message || "Yo'l varaqasini yaratishda xatolik yuz berdi");
+    } finally {
+      setIsGeneratingWaybill(false);
+    }
+  };
+
   const handleNormSubmit = async (e) => {
     e.preventDefault();
 
@@ -557,6 +626,7 @@ export default function CarPage() {
       fuel_id: normFormData.fuel_id,
       norm_per_100km: Number(normFormData.norm_per_100km),
       current_balance: Number(normFormData.current_balance),
+      effective_from: normFormData.effective_from
     };
 
     try {
@@ -579,7 +649,7 @@ export default function CarPage() {
     setIsSubmitting(true);
     try {
       await apiCars.Delete(carToDelete.id);
-      removeElectricStatus(carToDelete.id);
+
       onDeleteClose();
 
       const nextPage =
@@ -782,7 +852,11 @@ export default function CarPage() {
                 pointerEvents={isFetching ? "none" : "auto"}
                 transition="opacity 0.15s ease"
               >
-                <Table variant="simple" size="sm" style={{ tableLayout: "fixed", width: "100%" }}>
+                <Table
+                  variant="simple"
+                  size="sm"
+                  style={{ tableLayout: "fixed", width: "100%" }}
+                >
                   <Thead>
                     <Tr bg="surfBlur">
                       <Th
@@ -924,7 +998,11 @@ export default function CarPage() {
                               >
                                 {car.name}
                               </Text>
-                              <Text fontSize="10px" color="textSecondary" lineHeight="1.2">
+                              <Text
+                                fontSize="10px"
+                                color="textSecondary"
+                                lineHeight="1.2"
+                              >
                                 Transport
                               </Text>
                             </VStack>
@@ -999,11 +1077,11 @@ export default function CarPage() {
 
                         {/* 3. Haydovchi */}
                         <Td borderColor="border" px={3} py={2.5}>
-                          <Text 
-                            color="text" 
-                            fontSize="xs" 
-                            fontWeight="500" 
-                            noOfLines={2} 
+                          <Text
+                            color="text"
+                            fontSize="xs"
+                            fontWeight="500"
+                            noOfLines={2}
                             wordBreak="break-word"
                             lineHeight="1.2"
                           >
@@ -1013,10 +1091,10 @@ export default function CarPage() {
 
                         {/* 4. Mas'ul Xodim */}
                         <Td borderColor="border" px={3} py={2.5}>
-                          <Text 
-                            color="textSecondary" 
-                            fontSize="xs" 
-                            noOfLines={2} 
+                          <Text
+                            color="textSecondary"
+                            fontSize="xs"
+                            noOfLines={2}
                             wordBreak="break-word"
                             lineHeight="1.2"
                           >
@@ -1040,7 +1118,12 @@ export default function CarPage() {
                               size={12}
                               color="var(--chakra-colors-textSecondary)"
                             />
-                            <Text color="text" fontSize="11px" fontWeight="600" whiteSpace="nowrap">
+                            <Text
+                              color="text"
+                              fontSize="11px"
+                              fontWeight="600"
+                              whiteSpace="nowrap"
+                            >
                               {car.speedometer
                                 ? car.speedometer.toLocaleString("uz-UZ")
                                 : 0}{" "}
@@ -1054,7 +1137,7 @@ export default function CarPage() {
                           {car.car_fuel_norm && car.car_fuel_norm.length > 0 ? (
                             <VStack align="start" spacing={1} maxW="100%">
                               {car.car_fuel_norm
-                                .slice(0, 2)
+                              
                                 .map((norm, idx) => {
                                   const fuelName =
                                     norm?.fuel?.name || "Yoqilg'i";
@@ -1117,7 +1200,11 @@ export default function CarPage() {
                                 borderRadius="full"
                                 bg="green.500"
                               />
-                              <Text fontSize="10px" fontWeight="600" whiteSpace="nowrap">
+                              <Text
+                                fontSize="10px"
+                                fontWeight="600"
+                                whiteSpace="nowrap"
+                              >
                                 Faol
                               </Text>
                             </HStack>
@@ -1139,7 +1226,11 @@ export default function CarPage() {
                                 borderRadius="full"
                                 bg="red.500"
                               />
-                              <Text fontSize="10px" fontWeight="600" whiteSpace="nowrap">
+                              <Text
+                                fontSize="10px"
+                                fontWeight="600"
+                                whiteSpace="nowrap"
+                              >
                                 Nofaol
                               </Text>
                             </HStack>
@@ -1147,7 +1238,12 @@ export default function CarPage() {
                         </Td>
 
                         {/* 8. AMALLAR (KEBAB MENU) */}
-                        <Td borderColor="border" px={2} py={2.5} textAlign="center">
+                        <Td
+                          borderColor="border"
+                          px={2}
+                          py={2.5}
+                          textAlign="center"
+                        >
                           {showDeleted ? (
                             <Tooltip label="Tiklash" hasArrow>
                               <IconButton
@@ -1193,12 +1289,21 @@ export default function CarPage() {
                                 p={1}
                                 minW="130px"
                               >
+                              <MenuItem
+                                  icon={<PanelLeftRightDashed size={14} />}
+                                  fontSize={"xs"}
+                                  fontWeight={"500"}
+                                  color={"text"}
+                                  _hover={{ bg: "blackAlpha.50" }}
+                                  onClick={() => handleOpenWaybillModal(car)}
+                                >
+                                  Yo'l varaqasi
+                                </MenuItem>
                                 <MenuItem
                                   icon={<Fuel size={14} color={ACCENT} />}
                                   fontSize="xs"
                                   fontWeight="500"
                                   color="text"
-
                                   _hover={{ bg: "blackAlpha.50" }}
                                   onClick={() => handleOpenNormModal(car)}
                                 >
@@ -1209,18 +1314,21 @@ export default function CarPage() {
                                   fontSize="xs"
                                   fontWeight="500"
                                   color="text"
-                           
                                   _hover={{ bg: "blackAlpha.50" }}
                                   onClick={() => handleOpenEdit(car)}
                                 >
                                   Tahrirlash
                                 </MenuItem>
                                 <MenuItem
-                                  icon={<Trash2 size={14} color="var(--chakra-colors-red-500)" />}
+                                  icon={
+                                    <Trash2
+                                      size={14}
+                                      color="var(--chakra-colors-red-500)"
+                                    />
+                                  }
                                   fontSize="xs"
                                   fontWeight="500"
                                   color="red.500"
-
                                   _hover={{ bg: "red.50" }}
                                   onClick={() => handleOpenDelete(car)}
                                 >
@@ -1650,6 +1758,225 @@ export default function CarPage() {
         </ModalContent>
       </Modal>
 
+
+      {/* YO'L VARAQASI MODAL */}
+      <Modal isOpen={isWaybillOpen} onClose={handleCloseWaybillModal} size="md" isCentered>
+        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
+        <ModalContent borderRadius="2xl" boxShadow="2xl" bg="surface" overflow="hidden">
+          <ModalHeader
+            borderBottom="1px solid"
+            borderColor="border"
+            fontSize="md"
+            fontWeight="700"
+            color="text"
+            py={4}
+            px={6}
+          >
+            Yo'l varaqasi
+          </ModalHeader>
+          <ModalCloseButton mt={1} color="textSecondary" borderRadius="lg" />
+
+          <ModalBody bg="bg" p={6}>
+            <VStack spacing={4} align="stretch">
+              {/* Avtomatik to'ldiriladigan ma'lumotlar */}
+              <Box
+                p={3.5}
+                borderRadius="xl"
+                bg="surface"
+                border="1px solid"
+                borderColor="border"
+              >
+                <Text
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                  mb={2}
+                >
+                  Avtomobil ma'lumotlari
+                </Text>
+                <VStack align="start" spacing={1}>
+                  <Text fontSize="sm" color="text">
+                    <b>Nomi:</b> {selectedWaybillCar?.name}
+                  </Text>
+                  <Text fontSize="sm" color="text">
+                    <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
+                  </Text>
+                  <Text fontSize="sm" color="text">
+                    <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
+                  </Text>
+                  <Text fontSize="sm" color="text">
+                    <b>Mas'ul xodim:</b> {selectedWaybillCar?.responsible_name}
+                  </Text>
+                  <Text fontSize="sm" color="text">
+                    <b>Speedometer:</b> {selectedWaybillCar?.speedometer} km
+                  </Text>
+                </VStack>
+              </Box>
+
+              <FormControl isRequired isInvalid={waybillErrors.year}>
+                <FormLabel
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                >
+                  Yil
+                </FormLabel>
+                <Input
+                  type="number"
+                  name="year"
+                  bg="surface"
+                  color="text"
+                  borderColor="border"
+                  borderRadius="xl"
+                  focusBorderColor={ACCENT}
+                  value={waybillForm.year}
+                  onChange={handleWaybillChange}
+                />
+              </FormControl>
+
+              <FormControl isRequired isInvalid={waybillErrors.month}>
+                <FormLabel
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                >
+                  Oy
+                </FormLabel>
+                <Select
+                  name="month"
+                  placeholder="Oyni tanlang"
+                  bg="surface"
+                  color="text"
+                  borderColor="border"
+                  borderRadius="xl"
+                  focusBorderColor={ACCENT}
+                  value={waybillForm.month}
+                  onChange={handleWaybillChange}
+                >
+                  <option value="1">Yanvar</option>
+                  <option value="2">Fevral</option>
+                  <option value="3">Mart</option>
+                  <option value="4">Aprel</option>
+                  <option value="5">May</option>
+                  <option value="6">Iyun</option>
+                  <option value="7">Iyul</option>
+                  <option value="8">Avgust</option>
+                  <option value="9">Sentabr</option>
+                  <option value="10">Oktabr</option>
+                  <option value="11">Noyabr</option>
+                  <option value="12">Dekabr</option>
+                </Select>
+              </FormControl>
+
+              <FormControl isRequired isInvalid={waybillErrors.number}>
+                <FormLabel
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                >
+                  Yo'l varaqasi raqami
+                </FormLabel>
+                <Input
+                  name="number"
+                  placeholder="Masalan: 00123"
+                  bg="surface"
+                  color="text"
+                  borderColor="border"
+                  borderRadius="xl"
+                  focusBorderColor={ACCENT}
+                  value={waybillForm.number}
+                  onChange={handleWaybillChange}
+                />
+              </FormControl>
+
+              <FormControl isRequired isInvalid={waybillErrors.issueDate}>
+                <FormLabel
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                >
+                  Berilgan sana
+                </FormLabel>
+                <Input
+                  type="date"
+                  name="issueDate"
+                  bg="surface"
+                  color="text"
+                  borderColor="border"
+                  borderRadius="xl"
+                  focusBorderColor={ACCENT}
+                  value={waybillForm.issueDate}
+                  onChange={handleWaybillChange}
+                />
+              </FormControl>
+
+              <FormControl isRequired isInvalid={waybillErrors.issueTime}>
+                <FormLabel
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                >
+                  Berilgan vaqt
+                </FormLabel>
+                <Input
+                  type="time"
+                  name="issueTime"
+                  bg="surface"
+                  color="text"
+                  borderColor="border"
+                  borderRadius="xl"
+                  focusBorderColor={ACCENT}
+                  value={waybillForm.issueTime}
+                  onChange={handleWaybillChange}
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+
+          <ModalFooter
+            borderTop="1px solid"
+            borderColor="border"
+            bg="surface"
+            py={3.5}
+            px={6}
+          >
+           <Button
+              variant="ghost"
+              color="textSecondary"
+              _hover={{ bg: "blackAlpha.50", color: "text" }}
+              mr={3}
+              onClick={handleCloseWaybillModal}
+              size="sm"
+              borderRadius="xl"
+              isDisabled={isGeneratingWaybill}
+            >
+              Bekor qilish
+            </Button>
+           <Button
+              bg={ACCENT}
+              color="white"
+              _hover={{ bg: "#2563EB" }}
+              onClick={handleGenerateWaybill}
+              isLoading={isGeneratingWaybill}
+              loadingText="Yaratilmoqda..."
+              isDisabled={isGeneratingWaybill}
+              size="sm"
+              px={6}
+              borderRadius="xl"
+              boxShadow="sm"
+            >
+              Excel yuklash
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* NORMA O'RNATISH MODAL */}
       <Modal isOpen={isNormOpen} onClose={onNormClose} size="md" isCentered>
         <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
@@ -1828,6 +2155,26 @@ export default function CarPage() {
                   }}
                 />
               </FormControl>
+             <FormControl>
+  <FormLabel>Muddati</FormLabel>
+  <Input
+    type="date"
+    bg={"surface"}
+    color={"text"}
+    borderColor={"border"}
+    borderRadius={"xl"}
+    size={"md"}
+    focusBorderColor={ACCENT}
+    _hover={{ borderColor: ACCENT }}
+    value={normFormData.effective_from}
+    onChange={(e) => {
+      setNormFormData({
+        ...normFormData,
+        effective_from: e.target.value,
+      });
+    }}
+  />
+</FormControl>
             </VStack>
           </ModalBody>
 
