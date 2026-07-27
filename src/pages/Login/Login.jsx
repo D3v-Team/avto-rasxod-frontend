@@ -87,9 +87,9 @@ export default function Login() {
       toastService.success("Xush kelibsiz!");
 
       if (data.user.role === "super_admin") {
-        navigate("/admin/dashboard", { replace: true });
+        navigate("/superadmin/dashboard", { replace: true });
       } else {
-        navigate("/xodim/dashboard", { replace: true });
+        navigate("/admin/dashboard", { replace: true });
       }
     } catch (error) {
       // Tarmoq yoki server xatosi

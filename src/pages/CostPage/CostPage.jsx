@@ -52,7 +52,6 @@ import { apiFuel } from "../../Services/api/Fuels";
 import { apiCars } from "../../Services/api/Cars";
 import { toastService } from "../../utils/toast";
 
-// ---------- constants & helpers ----------
 const FETCH_LIMIT = 100;
 
 const formatAsInputDate = (dateObj) => {
@@ -74,7 +73,6 @@ const isFutureDate = (dateStr) => {
   return checkDate > today;
 };
 
-// oy nomlari (o'zbekcha)
 const MONTH_NAMES_UZ = [
   "Yanvar",
   "Fevral",
@@ -94,7 +92,7 @@ const MONTH_NAMES_UZ = [
 function getYearOptions() {
   const current = getCurrentYear();
   const years = [];
-  for (let y = current - 6; y <= current + 1; y++) years.push(y);
+  for (let y = current - 1; y <= current + 4; y++) years.push(y);
   return years;
 }
 
@@ -123,9 +121,7 @@ function loadFiltersFromStorage() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") return parsed;
-  } catch (e) {
-    // localStorage mavjud emas yoki JSON buzilgan — e'tiborsiz qoldiramiz
-  }
+  } catch (e) {}
   return null;
 }
 
@@ -384,6 +380,15 @@ function normalizeCar(raw) {
   };
 }
 
+// TUZATILDI: backend endi har bir yozuvda o'sha vaqtdagi (yozuv
+// yaratilgan paytdagi) qadriyatlarni ham qaytaradi:
+// fuel_price_at_time, norm_per_100km_at_time,
+// responsible_employee_at_time { id, full_name },
+// driver_at_time { id, full_name }, va to'liq nested `fuel` / `car`
+// obyektlari. extractComputed shu maydonlarni ham chiqarib oladi —
+// avval faqat "joriy" (hozirgi) qiymatlarga tayanilardi, bu esa
+// narx/norma o'zgargandan keyin eski yozuvlar uchun noto'g'ri
+// ma'lumot ko'rsatishga olib kelardi.
 function extractComputed(row) {
   return {
     distance: pick(
@@ -428,6 +433,24 @@ function extractComputed(row) {
       ],
       null,
     ),
+    // Yozuv yaratilgan paytdagi yoqilg'i narxi — summani ANIQ
+    // hisoblash uchun (joriy narx emas!).
+    priceAtTime: pick(
+      row,
+      ["fuel_price_at_time", "price_at_time", "fuel_price"],
+      null,
+    ),
+    // Yozuv yaratilgan paytdagi sarf normasi (100 km ga).
+    normAtTime: pick(
+      row,
+      ["norm_per_100km_at_time", "norm_at_time", "norm_per_100km"],
+      null,
+    ),
+    // O'sha paytdagi mas'ul xodim va haydovchi (agar keyin
+    // mashinaga boshqa mas'ul/haydovchi tayinlansa ham, tarixiy
+    // yozuv o'zgarmasligi kerak).
+    responsibleEmployee: pick(row, ["responsible_employee_at_time"], null),
+    driver: pick(row, ["driver_at_time"], null),
   };
 }
 
@@ -539,11 +562,22 @@ function EstimatedCell({ value, unit, tooltip }) {
   );
 }
 
-function FuelBadge({ fuelId, fuelTypesById }) {
-  const meta = fuelTypesById[fuelId] || {
-    label: fuelId || "—",
-    colorScheme: "neutral",
-  };
+// TUZATILDI: `fallback` prop qo'shildi. Agar `fuelId` `fuelTypesById`
+// ro'yxatida topilmasa (masalan yoqilg'i turi o'chirilgan yoki
+// sahifalash chegarasidan tashqarida bo'lsa), backend javobidagi
+// nested `row.fuel` obyektidan (fallback) foydalaniladi — shunda
+// belgi/nom hech qachon "—" bo'lib qolmaydi.
+function FuelBadge({ fuelId, fuelTypesById, fallback }) {
+  let meta = fuelTypesById[fuelId];
+  if (!meta && fallback) {
+    meta = {
+      label: fallback.name || fuelId || "—",
+      colorScheme: getFuelColorScheme(fallback.name, 0),
+    };
+  }
+  if (!meta) {
+    meta = { label: fuelId || "—", colorScheme: "neutral" };
+  }
   return (
     <Badge
       colorScheme={meta.colorScheme}
@@ -1116,12 +1150,28 @@ function NewRowInline({
         Number(newRow.received_amount) -
         (estimatedFuelConsumed || 0)
       : null;
+  // TUZATILDI: avval "distance" (yurgan km) har doim majburiy va
+  // musbat bo'lishi shart edi. Lekin haqiqiy foydalanishda ikkita
+  // holat ham bo'lishi kerak:
+  //   1) faqat yoqilg'i quyilgan kun (km yozilmagan) — masalan
+  //      to'ldirish stansiyasida to'ldirib qo'yilgan, lekin hali
+  //      yurilmagan;
+  //   2) faqat km bosib o'tilgan kun (yoqilg'i quyilmagan) — masalan
+  //      baklarda yoqilg'i yetarli, faqat masofa qayd etiladi.
+  // Shuning uchun endi tugma faollashishi uchun "distance" va
+  // "received_amount" dan KAMIDA BITTASI musbat bo'lishi kifoya —
+  // ikkalasi ham bo'sh/0 bo'lsagina tugma o'chirilgan holatda qoladi.
+  const hasValidDistance =
+    newRow.distance !== "" && Number(newRow.distance) > 0;
+  const hasValidFuel =
+    newRow.received_amount !== "" && Number(newRow.received_amount) > 0;
   const isValid =
     !disabled &&
     !dateAlreadyUsed &&
     newRow.date &&
     newRow.fuel_id &&
-    newRow.odometer_start !== "";
+    newRow.odometer_start !== "" &&
+    (hasValidDistance || hasValidFuel);
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
@@ -1394,25 +1444,70 @@ function DataRow({
   editingId,
   onStartEdit,
   onDelete,
-  isLastRow,
 }) {
-  const { distance, fuelConsumed, sum, balanceAfter } = extractComputed(row);
+  const {
+    distance,
+    fuelConsumed,
+    sum,
+    balanceAfter,
+    priceAtTime,
+    normAtTime,
+    responsibleEmployee,
+    driver,
+  } = extractComputed(row);
+
+  // Avval faqat fuelTypesById dan olinardi — agar shu fuel_id
+  // ro'yxatda bo'lmasa (masalan yoqilg'i turi keyinchalik o'chirilgan
+  // yoki sahifalash chegarasidan tashqarida bo'lsa), belgi/birlik
+  // ko'rinmay qolardi. Endi javobda kelayotgan row.fuel obyektidan
+  // ham fallback qilinadi.
   const fuelMeta = fuelTypesById[row.fuel_id] || row.fuel || null;
   const fuelUnit = row.fuel_unit || fuelMeta?.unit || "litr";
-  const fuelPrice =
-    fuelMeta?.price !== undefined && fuelMeta?.price !== null
-      ? Number(fuelMeta.price)
-      : null;
+
+  // Summa endi HOZIRGI (joriy) narx emas, balki o'sha yozuv
+  // yaratilgan paytdagi narx (fuel_price_at_time) bilan hisoblanadi —
+  // aks holda narx keyin o'zgargach eski yozuvlarning summasi
+  // noto'g'ri ko'rsatilib qolardi.
+  const effectivePrice =
+    priceAtTime !== null
+      ? Number(priceAtTime)
+      : fuelMeta?.price !== undefined && fuelMeta?.price !== null
+        ? Number(fuelMeta.price)
+        : null;
+
   const displaySum =
     sum !== null
       ? sum
-      : fuelPrice !== null &&
+      : effectivePrice !== null &&
           row.received_amount !== undefined &&
           row.received_amount !== null
-        ? Number(row.received_amount) * fuelPrice
+        ? Number(row.received_amount) * effectivePrice
         : null;
+
   const sumIsComputedLocally = sum === null && displaySum !== null;
-  const showActions = isLastRow && editingId === null;
+
+  // TUZATILDI: avval tahrirlash/o'chirish tugmalari faqat RO'YXATDAGI
+  // ENG OXIRGI qatorda ko'rinardi (isLastRow). Endi foydalanuvchi
+  // so'ragani bo'yicha — o'tgan (oldingi) kunlar uchun ham amallar
+  // ko'rinadi, shu bilan har qanday kunlik yozuvni tahrirlash yoki
+  // o'chirish mumkin bo'ladi. Faqat boshqa bir qator hozir
+  // tahrirlanayotgan bo'lsa, tugmalar vaqtincha o'chiriladi.
+  const showActions = editingId === null;
+
+  // Sana ustuniga tooltip: o'sha kundagi mas'ul xodim, haydovchi va
+  // sarf normasi haqida ma'lumot (backend "*_at_time" maydonlari
+  // orqali beradi).
+  const dateTooltipParts = [];
+  if (responsibleEmployee?.full_name) {
+    dateTooltipParts.push(`Mas'ul: ${responsibleEmployee.full_name}`);
+  }
+  if (driver?.full_name) {
+    dateTooltipParts.push(`Haydovchi: ${driver.full_name}`);
+  }
+  if (normAtTime !== null && normAtTime !== undefined) {
+    dateTooltipParts.push(`Norma: ${formatNumber(normAtTime)} / 100 km`);
+  }
+  const dateTooltip = dateTooltipParts.join(" • ");
 
   return (
     <Tr
@@ -1421,10 +1516,27 @@ function DataRow({
       transition="background 0.15s ease"
     >
       <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
-        {formatDate(row.date)}
+        {dateTooltip ? (
+          <Tooltip label={dateTooltip} placement="top" hasArrow openDelay={300}>
+            <Text
+              as="span"
+              cursor="default"
+              borderBottom="1px dashed"
+              borderColor="border"
+            >
+              {formatDate(row.date)}
+            </Text>
+          </Tooltip>
+        ) : (
+          formatDate(row.date)
+        )}
       </Td>
       <Td borderColor="border">
-        <FuelBadge fuelId={row.fuel_id} fuelTypesById={fuelTypesById} />
+        <FuelBadge
+          fuelId={row.fuel_id}
+          fuelTypesById={fuelTypesById}
+          fallback={row.fuel}
+        />
       </Td>
       <Td isNumeric color="text" borderColor="border">
         {formatNumber(row.received_amount)} {fuelUnit}
@@ -1433,7 +1545,11 @@ function DataRow({
         <AutoCell
           value={fuelConsumed}
           unit={fuelUnit}
-          tooltip="Backend hisoblagan"
+          tooltip={
+            normAtTime !== null && normAtTime !== undefined
+              ? `Backend hisoblagan (norma: ${formatNumber(normAtTime)} / 100 km)`
+              : "Backend hisoblagan"
+          }
         />
       </Td>
       <Td isNumeric color="textSecondary" borderColor="border">
@@ -1455,7 +1571,9 @@ function DataRow({
           unit="so'm"
           tooltip={
             sumIsComputedLocally
-              ? "Olingan yoqilg'i x narx asosida hisoblangan"
+              ? `Olingan yoqilg'i x o'sha paytdagi narx (${
+                  effectivePrice !== null ? formatNumber(effectivePrice) : "—"
+                } so'm) asosida hisoblangan`
               : "Backend hisoblagan"
           }
         />
@@ -1781,7 +1899,6 @@ function ExpenseTable({
   );
 
   const renderRow = (row, idx) => {
-    const isLast = idx === items.length - 1;
     if (row.id === editingId) {
       return (
         <EditRowInline
@@ -1805,7 +1922,6 @@ function ExpenseTable({
         editingId={editingId}
         onStartEdit={onStartEdit}
         onDelete={onDelete}
-        isLastRow={isLast}
       />
     );
   };
@@ -2138,18 +2254,38 @@ function CostPage() {
   }, [loadExpenses]);
 
   // ------------------------------------------------------------------
-  // AVTOMATIK "boshlang'ich spidometr" (odometer_start) — TUZATILDI:
-  // Bu qiymat foydalanuvchi tomonidan qo'lda kiritilmaydi (faqat
-  // AutoCell orqali ko'rsatiladi), shuning uchun uni har safar
-  // `expenses` ro'yxati o'zgarganda (yangi yozuv qo'shilganda,
-  // tahrirlanganda yoki o'chirilganda) qayta hisoblash xavfsiz.
+  // AVTOMATIK "boshlang'ich spidometr" (odometer_start)
   //
-  // OLDIN: faqat `newRow.odometer_start === ""` bo'lganda hisoblanardi,
-  // shuning uchun bir marta hisoblab bo'lgach eski (noto'g'ri) qiymatda
-  // "qotib" qolar edi — masalan, avval 60 km bilan yozuv qo'shilib,
-  // keyin o'sha yozuv 40 km ga tahrirlansa ham, "qo'shish" qatoridagi
-  // boshlang'ich spidometr hali ham eski (60 km asosidagi) qiymatda
-  // qolib, keyingi masofa noto'g'ri (go'yo 60+40 kabi) hisoblanardi.
+  // TUZATILDI (2-marta): bu effekt oldin faqat JORIY OYGA filtrlangan
+  // `expenses` ro'yxatidagi eng oxirgi yozuvga qarardi. Agar tanlangan
+  // oyda hali hech qanday yozuv bo'lmasa (masalan foydalanuvchi
+  // boshqa oyni ko'rib, joriy oyga qaytganda, yoki mashina/oy
+  // almashtirilganda), kod "cars" ro'yxatidagi STATIK
+  // (car.odometer/speedometer) qiymatga qaytib ketardi. Bu esa aynan
+  // "yozuv qo'shgandan keyin spidometr eski qiymatga qaytib
+  // qolyapti" degan bugning sababi edi — chunki `cars` state odatda
+  // FAQAT sahifa birinchi ochilganda yuklanadi va yozuv
+  // qo'shilgandan/o'chirilgandan keyin YANGILANMAYDI.
+  //
+  // Bu endi 2 bosqichda tuzatilgan:
+  //  1) Agar backend `odometer_end` qaytarmasa — o'zimiz
+  //     odometer_start + distance/mileage orqali hisoblaymiz (eski
+  //     yozuv formatlariga moslashish uchun).
+  //  2) `handleAddRow` / `saveEdit` / `confirmDelete` muvaffaqiyatli
+  //     tugagach endi pastda `loadCars()` ham chaqiriladi — shunda
+  //     "cars" state (demak fallback qiymat) ham har doim eng so'nggi
+  //     haqiqiy spidometr bilan sinxron turadi.
+  //
+  // TUZATILDI (3-marta): `handleAddRow` va `saveEdit` ichida
+  // serverdan qaytgan CHALA (odometer_end'siz) obyektni to'g'ridan-
+  // to'g'ri `expenses` state'ga qo'shish/almashtirish olib
+  // tashlandi. Avval shu "chala" yozuv sabab bu effekt bir lahzaga
+  // noto'g'ri (eski `cars.odometer`) qiymatga sakrab, keyin
+  // `loadExpenses()` tugagach yana to'g'rilanardi — foydalanuvchiga
+  // spidometr "o'zgarib ketayotgandek" ko'rinardi. Endi `expenses`
+  // faqat `loadExpenses()` orqali TO'LIQ va TO'G'RI ma'lumot bilan
+  // yangilanadi, shuning uchun bu effekt hech qachon vaqtinchalik
+  // noto'g'ri qiymat bilan ishga tushmaydi.
   // ------------------------------------------------------------------
   useEffect(() => {
     if (!selectedCarId) return;
@@ -2163,12 +2299,27 @@ function CostPage() {
         const db = new Date(b.date).getTime() || 0;
         return db > da ? b : a;
       });
+
       if (latest?.odometer_end !== undefined && latest?.odometer_end !== null) {
+        // Backend to'g'ridan-to'g'ri odometer_end qaytarsa — shuni olamiz
         computedStart = String(latest.odometer_end);
+      } else {
+        // Fallback: backend "odometer_end" maydonini qaytarmasa,
+        // shu yozuvning o'zidagi odometer_start + distance/mileage
+        // orqali hisoblab olamiz.
+        const { distance } = extractComputed(latest);
+        const startVal = pick(latest, ["odometer_start"], null);
+        const distVal =
+          distance !== null ? distance : pick(latest, ["mileage"], null);
+        if (startVal !== null && distVal !== null) {
+          computedStart = String(Number(startVal) + Number(distVal));
+        }
       }
     }
 
     if (computedStart === null) {
+      // Tanlangan oyda hali yozuv yo'q — mashinaning ENG SO'NGGI
+      // (loadCars orqali yangilanib turadigan) spidometridan olamiz.
       const car = cars.find((c) => c.id === selectedCarId);
       if (car?.odometer !== undefined && car?.odometer !== null) {
         computedStart = String(car.odometer);
@@ -2233,6 +2384,24 @@ function CostPage() {
       return;
     }
 
+    // "distance" (km) va "received_amount" (yoqilg'i) ikkalasi ham
+    // majburiy emas — lekin KAMIDA BITTASI musbat son bo'lishi shart.
+    const distanceValid =
+      newRow.distance !== "" &&
+      !Number.isNaN(Number(newRow.distance)) &&
+      Number(newRow.distance) > 0;
+    const fuelValid =
+      newRow.received_amount !== "" &&
+      !Number.isNaN(Number(newRow.received_amount)) &&
+      Number(newRow.received_amount) > 0;
+
+    if (!distanceValid && !fuelValid) {
+      toastService.error(
+        "Bosib o'tilgan masofa (km) yoki olingan yoqilg'i miqdoridan kamida bittasini kiriting",
+      );
+      return;
+    }
+
     if (isFutureDate(newRow.date)) {
       toastService.error(
         "Ertangi kun uchun ma'lumot qo'shib bo'lmaydi! Faqat bugungi yoki o'tgan kunlar uchun yozuv qo'shishingiz mumkin.",
@@ -2250,12 +2419,9 @@ function CostPage() {
       return;
     }
 
-    if (newRow.distance !== "" && Number(newRow.distance) < 0) {
-      toastService.error("Yurgan km manfiy bo'lishi mumkin emas");
-      return;
-    }
-
     const odometerStart = Number(newRow.odometer_start);
+    // distance bo'sh qoldirilgan bo'lsa (faqat yoqilg'i kiritilgan kun),
+    // 0 km sifatida yuboriladi — spidometr o'zgarmaydi.
     const distanceValue = newRow.distance === "" ? 0 : Number(newRow.distance);
     const odometerEnd = odometerStart + distanceValue;
 
@@ -2263,24 +2429,31 @@ function CostPage() {
     const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
 
     try {
-      const response = await apiCost.Create({
+      await apiCost.Create({
         car_id: selectedCarId,
         fuel_id: newRow.fuel_id,
         date: newRow.date,
-        odometer_start: odometerStart,
-        odometer_end: odometerEnd,
-        distance: distanceValue,
+        // backend DTO (CreateCarDailyExpenseDto) "distance" emas,
+        // "mileage" nomli maydonni kutadi. odometer_start/odometer_end
+        // faqat frontendning ichki (UI) hisob-kitobi uchun ishlatiladi,
+        // backendga yuborilmaydi.
+        mileage: distanceValue,
         received_amount:
           newRow.received_amount === "" ? 0 : Number(newRow.received_amount),
         is_holiday: newRow.is_holiday,
         note: "",
       });
 
-      const created = extractSingle(response);
-      if (created && created.id !== undefined) {
-        setExpenses((prev) => [...prev, created]);
-      }
-
+      // TUZATILDI: bu yerda avval `apiCost.Create` javobidan olingan
+      // CHALA obyekt (odometer_end'siz) `expenses` state'ga
+      // optimistik qo'shilardi. Bu maydon yo'qligi sababli, pastdagi
+      // "avtomatik spidometr boshi" effekti bir lahzaga noto'g'ri
+      // (eski `cars.odometer`) qiymatga qaytib ketardi — aynan
+      // "spidometr boshi o'zgarib ketyapti" degan bugning sababi shu
+      // edi. Endi bunday optimistik (yarim to'liq) yozuv umuman
+      // qo'shilmaydi — `loadExpenses()` chaqiruvi `expenses`ni
+      // to'liq va to'g'ri (backend hisoblagan odometer_start/
+      // odometer_end bilan) ma'lumot bilan yangilaydi.
       toastService.dismiss(loadingToastId);
       toastService.success("Yangi xarajat qo'shildi");
 
@@ -2300,7 +2473,15 @@ function CostPage() {
         odometer_start: String(odometerEnd),
       });
 
-      loadExpenses();
+      // Yozuv qo'shilgandan so'ng mashinaning spidometr (car.speedometer)
+      // qiymati backendda avtomatik yangilanadi. Agar biz "cars" state'ni
+      // qayta yuklamasak, u eski (stale) qiymatda qolib qoladi va
+      // keyinroq (masalan oy almashtirilib qaytilganda) AVTOMATIK
+      // spidometr effekti aynan shu eski qiymatga "qaytib" ketishiga
+      // sabab bo'ladi. Shu sababli ro'yxatni ("loadExpenses") va
+      // mashinalarni ("loadCars") birga yangilaymiz.
+      await loadExpenses();
+      await loadCars();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2353,32 +2534,28 @@ function CostPage() {
       return;
     }
 
-    const odometerStart = Number(editForm.odometer_start);
-    const odometerEnd = odometerStart + Number(editForm.distance);
-
     setIsSavingEdit(true);
     const loadingToastId = toastService.loading("Yangilanmoqda...");
 
     try {
-      const response = await apiCost.Update(editingId, {
-        odometer_start: odometerStart,
-        odometer_end: odometerEnd,
-        distance: Number(editForm.distance),
+      await apiCost.Update(editingId, {
+        // UpdateCarDailyExpenseDto ham "mileage" nomini kutadi;
+        // "distance", "odometer_start", "odometer_end" DTO'da yo'q.
+        mileage: Number(editForm.distance),
         received_amount: Number(editForm.received_amount),
         is_holiday: editForm.is_holiday,
       });
 
-      const updated = extractSingle(response);
-      if (updated && updated.id !== undefined) {
-        setExpenses((prev) =>
-          prev.map((item) => (item.id === editingId ? updated : item)),
-        );
-      }
-
+   
       toastService.dismiss(loadingToastId);
       toastService.success("Yozuv yangilandi");
       cancelEdit();
-      loadExpenses();
+
+      // Tahrirlash km/mileage'ni o'zgartirishi mumkin, demak
+      // mashinaning umumiy spidometri ham o'zgargan bo'lishi mumkin —
+      // shu sababli mashinalar ro'yxatini ham yangilaymiz.
+      await loadExpenses();
+      await loadCars();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2401,7 +2578,12 @@ function CostPage() {
       toastService.dismiss(loadingToastId);
       toastService.success("Yozuv o'chirildi");
       deleteDialog.onClose();
-      loadExpenses();
+
+      // O'chirilgandan keyin ham mashinaning umumiy spidometri
+      // o'zgarishi mumkin (oxirgi yozuv o'chirilsa), shu sababli
+      // "cars" ro'yxatini ham yangilaymiz.
+      await loadExpenses();
+      await loadCars();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("O'chirib bo'lmadi: " + err.message);
