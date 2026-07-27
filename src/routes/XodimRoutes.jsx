@@ -3,6 +3,7 @@ import FuelPage from "../pages/FuelPage/FuelPage";
 import CarPage from "../pages/CarPage/CarPage";
 import CostPage from "../pages/CostPage/CostPage";
 import AdminPage from "../pages/AdminPage/AdminPage";
+import ZapchastPage from "../pages/ZapchastPage/ZapchastPage";
 
 const xodimRoutes = [
   {
@@ -29,6 +30,11 @@ const xodimRoutes = [
     name: "admins",
     path: "admins",
     element: <AdminPage />,
+  },
+  {
+    name: "zapchast",
+    path: "zapchast",
+    element: <ZapchastPage />,
   },
 ];
 export default xodimRoutes;

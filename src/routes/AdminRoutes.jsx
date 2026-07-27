@@ -4,6 +4,7 @@ import FuelPage from "../pages/FuelPage/FuelPage";
 import CarPage from "../pages/CarPage/CarPage";
 import CostPage from "../pages/CostPage/CostPage";
 import Admin from "../pages/AdminPage/Adminlar/Admin";
+import ZapchastPage from "../pages/ZapchastPage/ZapchastPage";
 
 const superAdminRoutes = [
   {
@@ -35,6 +36,11 @@ const superAdminRoutes = [
     name: "admin",
     path: "admin",
     element: <Admin />,
+  },
+  {
+    name: "zapchast",
+    path: "zapchast",
+    element: <ZapchastPage />,
   },
 ];
 export default superAdminRoutes;

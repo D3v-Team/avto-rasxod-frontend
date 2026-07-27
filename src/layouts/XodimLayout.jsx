@@ -2,14 +2,15 @@ import { Outlet } from "react-router";
 import Sidebar from "../components/common/Sidebar";
 import { Box } from "@chakra-ui/react";
 import { useUIStore } from "../store/useUIStore";
-import { Car, Fuel, HomeIcon, Users, Wallet2 } from "lucide-react";
+import { Car, Fuel, HomeIcon, Users, Wallet2, Wrench } from "lucide-react";
 
 const links = [
-  { label: "Bosh sahifa", to: "/xodim/dashboard", icon: HomeIcon },
-  { label: "Xarajatlar", to: "/xodim/costs", icon: Wallet2 },
-  { label: "Avtomobillar", to: "/xodim/cars", icon: Car },
-   { label: "Xodimlar", to: "/xodim/admins", icon: Users },
-  { label: "Yoqilg'i", to: "/xodim/fuel", icon: Fuel },
+  { label: "Bosh sahifa", to: "/admin/dashboard", icon: HomeIcon },
+  { label: "Xarajatlar", to: "/admin/costs", icon: Wallet2 },
+  { label: "Avtomobillar", to: "/admin/cars", icon: Car },
+  { label: "Zapchastlar", to: "/admin/zapchast", icon: Wrench },
+   { label: "Xodimlar", to: "/admin/admins", icon: Users },
+  { label: "Yoqilg'i", to: "/admin/fuel", icon: Fuel },
 ];
 
 export default function XodimLayout() {

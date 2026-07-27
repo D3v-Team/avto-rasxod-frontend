@@ -18,7 +18,7 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         <Route element={<RequireAuth role="super_admin" />}>
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/superadmin" element={<AdminLayout />}>
             {superAdminRoutes.map((r) => (
               <Route key={r.name} path={r.path} element={r.element} />
             ))}
@@ -26,7 +26,7 @@ function App() {
         </Route>
 
         <Route element={<RequireAuth role="admin" />}>
-          <Route path="/xodim" element={<XodimLayout />}>
+          <Route path="/admin" element={<XodimLayout />}>
             {xodimRoutes.map((r) => (
               <Route key={r.name} path={r.path} element={r.element} />
             ))}

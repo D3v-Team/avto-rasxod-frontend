@@ -75,9 +75,7 @@ class apiCars {
   return response;
 };
 
-  /* ==========================
-        CAR FUEL NORMS
-  ========================== */
+
 
   static AllNorms = async (
     page = 1,
