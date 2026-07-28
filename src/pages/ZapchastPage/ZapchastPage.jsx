@@ -37,6 +37,8 @@ import {
   HStack,
   VStack,
   SimpleGrid,
+  useColorModeValue,
+  useColorMode, // <-- Qo'shildi: native colorScheme uchun kerak
 } from "@chakra-ui/react";
 import {
   Search,
@@ -47,7 +49,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  CalendarRange,
   X,
 } from "lucide-react";
 import { apiCars } from "../../Services/api/Cars";
@@ -78,6 +79,22 @@ const paymentBadgeStyle = {
 
 const formatSum = (n) => Number(n || 0).toLocaleString("uz-UZ");
 
+// Oy nomlari
+const MONTH_NAMES = [
+  "Yanvar",
+  "Fevral",
+  "Mart",
+  "Aprel",
+  "May",
+  "Iyun",
+  "Iyul",
+  "Avgust",
+  "Sentabr",
+  "Oktabr",
+  "Noyabr",
+  "Dekabr",
+];
+
 export default function ZapchastPage() {
   const [parts, setParts] = useState([]);
   const [cars, setCars] = useState([]);
@@ -91,6 +108,9 @@ export default function ZapchastPage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
+
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [deletingPart, setDeletingPart] = useState(null);
@@ -110,7 +130,63 @@ export default function ZapchastPage() {
     onClose: onDeleteClose,
   } = useDisclosure();
 
-  // Backenddan xarajatlarni yuklash (Background Fetch)
+  // Dark/Light muhit uchun o'zgaruvchilar
+  const exportHoverBg = useColorModeValue(
+    "green.50",
+    "rgba(52, 211, 153, 0.1)",
+  );
+
+  // === YANGI: native <select>/<option> uchun dark-light qiymatlar ===
+  const { colorMode } = useColorMode();
+  const selectBg = useColorModeValue("#f1f5f9", "#1b253b");
+  const selectColor = useColorModeValue("#1e293b", "#f1f5f9");
+  const selectBorder = useColorModeValue("#cbd5e1", "#2f3b4a");
+  const selectHoverBorder = useColorModeValue("#94a3b8", "#4a5a6e");
+  // Option (ochiladigan ro'yxat) uchun alohida ranglar — bular <option style={}>
+  // orqali beriladi, chunki Chakra sx / _dark bu native popup'ga ta'sir qilmaydi
+  const optionBg = useColorModeValue("#ffffff", "#1b253b");
+  const optionColor = useColorModeValue("#1e293b", "#f1f5f9");
+  const selectArrow = useColorModeValue(
+    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2360A5FA' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+  );
+
+  // Yillar ro'yxati (2020 dan kelgusi yilgacha)
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = currentYear - 5; y <= currentYear + 1; y++) {
+      years.push(y);
+    }
+    return years;
+  }, []);
+
+  // Oy ro'yxati (1-12)
+  const monthOptions = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => i + 1);
+  }, []);
+
+  // Tanlangan yil va oy asosida dateFrom / dateTo ni yangilash
+  useEffect(() => {
+    if (filterYear && filterMonth) {
+      const year = parseInt(filterYear);
+      const month = parseInt(filterMonth);
+      const firstDay = new Date(year, month - 1, 1);
+      const lastDay = new Date(year, month, 0);
+
+      const from = firstDay.toISOString().slice(0, 10);
+      const to = lastDay.toISOString().slice(0, 10);
+
+      setDateFrom(from);
+      setDateTo(to);
+    } else {
+      setDateFrom("");
+      setDateTo("");
+    }
+    setCurrentPage(1);
+  }, [filterYear, filterMonth]);
+
+  // Backenddan xarajatlarni yuklash
   const fetchExpenses = async (
     targetPage = currentPage,
     searchQuery = search,
@@ -208,33 +284,21 @@ export default function ZapchastPage() {
     setCurrentPage(1);
   };
 
-  const handleDateFromChange = (e) => {
-    const value = e.target.value;
-    if (dateTo && value && value > dateTo) {
-      toast.error("Boshlanish sanasi tugash sanasidan katta bo'lishi mumkin emas");
-      return;
-    }
-    setDateFrom(value);
+  const handleYearChange = (value) => {
+    setFilterYear(value);
+  };
+
+  const handleMonthChange = (value) => {
+    setFilterMonth(value);
+  };
+
+  const clearFilter = () => {
+    setFilterYear("");
+    setFilterMonth("");
     setCurrentPage(1);
   };
 
-  const handleDateToChange = (e) => {
-    const value = e.target.value;
-    if (dateFrom && value && value < dateFrom) {
-      toast.error("Tugash sanasi boshlanish sanasidan kichik bo'lishi mumkin emas");
-      return;
-    }
-    setDateTo(value);
-    setCurrentPage(1);
-  };
-
-  const clearDateRange = () => {
-    setDateFrom("");
-    setDateTo("");
-    setCurrentPage(1);
-  };
-
-  // Mashinalar ro'yxatini bir marta yuklaymiz (select uchun)
+  // Mashinalar ro'yxatini bir marta yuklaymiz
   useEffect(() => {
     (async () => {
       setCarsLoading(true);
@@ -275,7 +339,7 @@ export default function ZapchastPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.quantity, form.price]);
 
-  // Pagination hisob-kitoblari
+  // Pagination
   const totalPages = useMemo(
     () => Math.max(1, serverTotalPages),
     [serverTotalPages],
@@ -300,7 +364,6 @@ export default function ZapchastPage() {
     return pages;
   }, [safeCurrentPage, totalPages]);
 
-  // car_id -> mashina nomi (jadval va o'chirish oynasida ko'rsatish uchun)
   const carNameById = useMemo(() => {
     const map = {};
     cars.forEach((c) => {
@@ -309,7 +372,6 @@ export default function ZapchastPage() {
     return map;
   }, [cars]);
 
-  // Joriy sahifadagi xarajatlar summasi
   const pageTotalSum = useMemo(
     () => parts.reduce((sum, p) => sum + (Number(p.total_price) || 0), 0),
     [parts],
@@ -340,7 +402,6 @@ export default function ZapchastPage() {
   async function handleSave(e) {
     e?.preventDefault();
 
-    // Validatsiya
     if (!form.car_id) {
       toast.error("Iltimos, mashinani tanlang");
       return;
@@ -406,14 +467,9 @@ export default function ZapchastPage() {
   }
 
   // Excel hisobotini yuklab olish
-  // GET /car-spare-parts-expenses/report/excel?date_from=&date_to=
-  // Bu endpoint date_from va date_to'ni MAJBURIY talab qiladi, shuning uchun
-  // ikkalasi ham tanlanmagan bo'lsa foydalanuvchiga xabar beramiz va so'rov yubormaymiz.
   async function handleExportExcel() {
     if (!dateFrom || !dateTo) {
-      toast.error(
-        "Excel hisobotini yuklab olish uchun sana oralig'ini (boshlanish va tugash) tanlang",
-      );
+      toast.error("Excel hisobotini yuklab olish uchun yil va oyni tanlang");
       return;
     }
 
@@ -421,8 +477,6 @@ export default function ZapchastPage() {
     try {
       const response = await apiZapchast.ExportExcel(dateFrom, dateTo);
 
-      // $api interceptori odatda response.data'ni qaytaradi, shuning uchun
-      // bu yerda ham to'g'ridan-to'g'ri Blob, ham axios response bo'lishini hisobga olamiz
       const blob =
         response instanceof Blob
           ? response
@@ -460,7 +514,6 @@ export default function ZapchastPage() {
       transition="background 0.2s ease"
     >
       <Box w="100%" maxW="100%" mx="auto">
-        {/* HEADER SECTION */}
         <Flex
           justify="space-between"
           align="center"
@@ -493,7 +546,7 @@ export default function ZapchastPage() {
           </Button>
         </Flex>
 
-        {/* SEARCH + DATE RANGE + EXCEL + COUNT ROW (bitta qatorda) */}
+        {/* SEARCH + DATE FILTER (YIL+OY SELECT) + EXCEL + COUNT ROW */}
         <Flex
           justify="space-between"
           align="center"
@@ -501,7 +554,12 @@ export default function ZapchastPage() {
           wrap={{ base: "wrap", xl: "nowrap" }}
           mb={5}
         >
-          <HStack spacing={3} flex="1" minW={0} flexWrap={{ base: "wrap", xl: "nowrap" }}>
+          <HStack
+            spacing={3}
+            flex="1"
+            minW={0}
+            flexWrap={{ base: "wrap", xl: "nowrap" }}
+          >
             <InputGroup maxW="280px" flexShrink={0}>
               <InputLeftElement pointerEvents="none">
                 <Search size={17} color="var(--chakra-colors-textSecondary)" />
@@ -523,77 +581,122 @@ export default function ZapchastPage() {
               />
             </InputGroup>
 
-            <HStack
-              spacing={2}
-              bg="surface"
-              border="1px solid"
-              borderColor="border"
-              borderRadius="lg"
-              px={3}
-              py={1.5}
-              flexShrink={0}
-            >
-              <CalendarRange
-                size={16}
-                color="var(--chakra-colors-textSecondary)"
-              />
-              <Input
-                type="date"
-                size="sm"
-                variant="unstyled"
-                color="text"
-                maxW="125px"
-                value={dateFrom}
-                onChange={handleDateFromChange}
-                aria-label="Boshlanish sanasi"
-              />
-              <Text color="textSecondary" fontSize="sm">
-                —
-              </Text>
-              <Input
-                type="date"
-                size="sm"
-                variant="unstyled"
-                color="text"
-                maxW="125px"
-                value={dateTo}
-                onChange={handleDateToChange}
-                aria-label="Tugash sanasi"
-              />
-              {(dateFrom || dateTo) && (
-                <Tooltip label="Sana filtrini tozalash">
+            {/* DARK/LIGHT GA TO'G'RI MOSLASHTIRILGAN YIL VA OY SELECTLARI */}
+            <HStack spacing={2} flexShrink={0} alignItems="center">
+              {/* YIL SELECT */}
+              <Box position="relative">
+                <Select
+                  size="sm"
+                  variant="unstyled"
+                  placeholder="Yil"
+                  value={filterYear}
+                  onChange={(e) => handleYearChange(e.target.value)}
+                  _focus={{ outline: "none" }}
+                  // MUHIM: native colorScheme — brauzer o'ziga xos
+                  // ochiladigan ro'yxatni (popup) mos rejimda chizadi
+                  style={{ colorScheme: colorMode }}
+                  sx={{
+                    appearance: "none",
+                    borderRadius: "8px",
+                    padding: "8px 32px 8px 16px",
+                    minWidth: "100px",
+                    cursor: "pointer",
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 12px center",
+                    backgroundSize: "16px",
+                    bg: selectBg,
+                    color: selectColor,
+                    borderColor: selectBorder,
+                    backgroundImage: selectArrow,
+                    _hover: { borderColor: selectHoverBorder },
+                    "&:focus": { borderColor: ACCENT, outline: "none" },
+                  }}
+                >
+                  {yearOptions.map((year) => (
+                    <option
+                      key={year}
+                      value={year}
+                      // Native <option> — faqat inline style orqali
+                      // (Chakra sx bu yerga ta'sir qilmaydi)
+                      style={{ background: optionBg, color: optionColor }}
+                    >
+                      {year}
+                    </option>
+                  ))}
+                </Select>
+              </Box>
+
+              {/* OY SELECT */}
+              <Box position="relative">
+                <Select
+                  size="sm"
+                  variant="unstyled"
+                  placeholder="Oy"
+                  value={filterMonth}
+                  onChange={(e) => handleMonthChange(e.target.value)}
+                  _focus={{ outline: "none" }}
+                  style={{ colorScheme: colorMode }}
+                  sx={{
+                    appearance: "none",
+                    borderRadius: "8px",
+                    padding: "8px 32px 8px 16px",
+                    minWidth: "100px",
+                    cursor: "pointer",
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 12px center",
+                    backgroundSize: "16px",
+                    bg: selectBg,
+                    color: selectColor,
+                    borderColor: selectBorder,
+                    backgroundImage: selectArrow,
+                    _hover: { borderColor: selectHoverBorder },
+                    "&:focus": { borderColor: ACCENT, outline: "none" },
+                  }}
+                >
+                  {monthOptions.map((month) => (
+                    <option
+                      key={month}
+                      value={month}
+                      style={{ background: optionBg, color: optionColor }}
+                    >
+                      {MONTH_NAMES[month - 1]}
+                    </option>
+                  ))}
+                </Select>
+              </Box>
+
+              {/* (SHARTLI) FILTRNI TOZALASH */}
+              {(filterYear || filterMonth) && (
+                <Tooltip label="Filtrni tozalash">
                   <IconButton
                     icon={<X size={14} />}
                     size="xs"
                     variant="ghost"
                     color="textSecondary"
-                    aria-label="Sana filtrini tozalash"
-                    onClick={clearDateRange}
+                    aria-label="Filtrni tozalash"
+                    onClick={clearFilter}
                     _hover={{ bg: "blackAlpha.50", color: "text" }}
                   />
                 </Tooltip>
               )}
             </HStack>
 
+            {/* EXCEL YUKLASH TUGMASI */}
             <Button
               leftIcon={<Download size={16} />}
-              leftIcon={<Download size={16} />}
-               size="sm"
+              size="sm"
               variant="outline"
-              colorScheme="green"
               borderRadius="md"
-            
+              borderColor="#34d399"
+              color="#34d399"
+              _hover={{ bg: exportHoverBg }}
               onClick={handleExportExcel}
               isLoading={isExporting}
               loadingText="Yuklanmoqda..."
               fontWeight="600"
               flexShrink={0}
-              isLoading={isExporting}
-              loadingText="Yuklanmoqda..."
-              fontWeight="600"
-              flexShrink={0}
             >
-              Excel yuklash
+              Export
             </Button>
           </HStack>
 
@@ -991,12 +1094,17 @@ export default function ZapchastPage() {
                     borderColor="border"
                     focusBorderColor="primary"
                     _hover={{ borderColor: ACCENT }}
+                    style={{ colorScheme: colorMode }}
                     onChange={(e) =>
                       setForm({ ...form, car_id: e.target.value })
                     }
                   >
                     {cars.map((car) => (
-                      <option key={car.id} value={car.id}>
+                      <option
+                        key={car.id}
+                        value={car.id}
+                        style={{ background: optionBg, color: optionColor }}
+                      >
                         {car.name}
                       </option>
                     ))}
@@ -1115,12 +1223,17 @@ export default function ZapchastPage() {
                     borderColor="border"
                     focusBorderColor="primary"
                     _hover={{ borderColor: ACCENT }}
+                    style={{ colorScheme: colorMode }}
                     onChange={(e) =>
                       setForm({ ...form, payment_type: e.target.value })
                     }
                   >
                     {PAYMENT_TYPES.map((pt) => (
-                      <option key={pt} value={pt}>
+                      <option
+                        key={pt}
+                        value={pt}
+                        style={{ background: optionBg, color: optionColor }}
+                      >
                         {pt}
                       </option>
                     ))}
@@ -1145,6 +1258,7 @@ export default function ZapchastPage() {
                     borderColor="border"
                     focusBorderColor="primary"
                     _hover={{ borderColor: ACCENT }}
+                    style={{ colorScheme: colorMode }}
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
                   />

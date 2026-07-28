@@ -61,7 +61,7 @@ class apiCost {
   // GET /car-daily-expenses/monthly-report/{car_id}?month=YYYY-MM
   static MonthlyReport = async (car_id, month) => {
     const response = await $api.get(
-      `/car-daily-expenses/monthly-report/${car_id}`,
+      `/car-daily-expenses/car-monthly-report/${car_id}`,
       { params: { month } },
     );
     return response.data;

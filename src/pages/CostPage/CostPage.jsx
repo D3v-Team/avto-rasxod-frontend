@@ -33,7 +33,6 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import {
-  Plus,
   Fuel,
   Check,
   X,
@@ -46,6 +45,7 @@ import {
   Download,
   TrendingUp,
   TrendingDown,
+  Plus,
 } from "lucide-react";
 import { apiCost } from "../../Services/api/apiCost";
 import { apiFuel } from "../../Services/api/Fuels";
@@ -112,8 +112,13 @@ function getDaysInMonth(year, month) {
   return new Date(year, month, 0).getDate();
 }
 
+function monthToYYYYMM(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 const LS_FILTERS_KEY = "costPage:filters";
 const LS_CAR_KEY = "costPage:selectedCarId";
+const SCROLL_KEY = "costPage:scrollY"; // Scroll holati uchun
 
 function loadFiltersFromStorage() {
   try {
@@ -128,8 +133,7 @@ function loadFiltersFromStorage() {
 function saveFiltersToStorage(filters) {
   try {
     window.localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(filters));
-  } catch (e) {
-  }
+  } catch (e) {}
 }
 
 function loadCarIdFromStorage() {
@@ -147,18 +151,8 @@ function saveCarIdToStorage(carId) {
     } else {
       window.localStorage.removeItem(LS_CAR_KEY);
     }
-  } catch (e) {
-  }
+  } catch (e) {}
 }
-
-const EMPTY_NEW_ROW = {
-  date: getTodayDate(),
-  fuel_id: "",
-  odometer_start: "",
-  distance: "",
-  received_amount: "",
-  is_holiday: false,
-};
 
 const EMPTY_EDIT_FORM = {
   date: "",
@@ -378,7 +372,6 @@ function normalizeCar(raw) {
   };
 }
 
-
 function extractComputed(row) {
   return {
     distance: pick(
@@ -433,7 +426,7 @@ function extractComputed(row) {
       ["norm_per_100km_at_time", "norm_at_time", "norm_per_100km"],
       null,
     ),
- 
+
     responsibleEmployee: pick(row, ["responsible_employee_at_time"], null),
     driver: pick(row, ["driver_at_time"], null),
 
@@ -443,6 +436,102 @@ function extractComputed(row) {
       null,
     ),
   };
+}
+
+function buildMonthDayRows(days) {
+  const rows = [];
+  (days || []).forEach((day) => {
+    const dayExpenses = Array.isArray(day.expenses) ? day.expenses : [];
+    if (dayExpenses.length === 0) {
+      rows.push({
+        __placeholder: true,
+        id: null,
+        date: day.date,
+        fuel_id: null,
+        odometer_start: pick(day, ["odometer_start"], null),
+        odometer_end: pick(day, ["odometer_end"], null),
+        mileage: pick(day, ["mileage"], 0),
+        received_amount: null,
+        is_holiday: false,
+      });
+    } else {
+      dayExpenses.forEach((exp) => {
+        rows.push({
+          ...exp,
+          __placeholder: false,
+          date: exp.date || day.date,
+          odometer_start:
+            exp.odometer_start !== undefined && exp.odometer_start !== null
+              ? exp.odometer_start
+              : pick(day, ["odometer_start"], null),
+          odometer_end:
+            exp.odometer_end !== undefined && exp.odometer_end !== null
+              ? exp.odometer_end
+              : pick(day, ["odometer_end"], null),
+          mileage:
+            exp.mileage !== undefined && exp.mileage !== null
+              ? exp.mileage
+              : pick(day, ["mileage"], 0),
+        });
+      });
+    }
+  });
+  return rows;
+}
+
+function computeTotalsFromExpenses(rows, fuelTypesById) {
+  const map = {};
+  rows.forEach((row) => {
+    if (row.__placeholder) return;
+    const fuelId = row.fuel_id;
+    if (!fuelId) return;
+    if (!map[fuelId]) {
+      const meta = fuelTypesById[fuelId];
+      map[fuelId] = {
+        fuel_id: fuelId,
+        fuel_name: meta?.label || row.fuel?.name || "Noma'lum",
+        fuel_unit: meta?.unit || "",
+        total_received_amount: 0,
+        total_fuel_expence: 0,
+        total_mileage: 0,
+        total_price_sum: 0,
+        current_balance: null,
+      };
+    }
+    const {
+      distance,
+      fuelConsumed,
+      sum,
+      receivedAmount,
+      balanceAfter,
+      priceAtTime,
+    } = extractComputed(row);
+    const meta = fuelTypesById[fuelId];
+
+    map[fuelId].total_received_amount += Number(receivedAmount) || 0;
+    map[fuelId].total_fuel_expence += Number(fuelConsumed) || 0;
+    map[fuelId].total_mileage +=
+      Number(distance !== null ? distance : row.mileage) || 0;
+
+    const price =
+      priceAtTime !== null
+        ? Number(priceAtTime)
+        : meta?.price !== undefined && meta?.price !== null
+          ? Number(meta.price)
+          : null;
+    const rowSum =
+      sum !== null
+        ? sum
+        : price !== null && receivedAmount !== null
+          ? Number(receivedAmount) * price
+          : 0;
+    map[fuelId].total_price_sum += Number(rowSum) || 0;
+
+    if (balanceAfter !== null && balanceAfter !== undefined) {
+      map[fuelId].current_balance = Number(balanceAfter);
+    }
+  });
+  return Object.values(map);
 }
 
 function formatNumber(value) {
@@ -955,7 +1044,7 @@ function CarSelector({
   isExporting,
 }) {
   return (
-    <Box mb={6} w="100%">
+    <Box w="100%">
       <Box
         bg="surface"
         borderRadius="2xl"
@@ -1012,87 +1101,9 @@ function CarSelector({
   );
 }
 
-function useFuelNormRate(carId, fuelId) {
-  const [rate, setRate] = useState(null);
-  useEffect(() => {
-    if (!carId || !fuelId) {
-      setRate(null);
-      return;
-    }
-    let cancelled = false;
-    apiCars
-      .AllNorms(1, 1, carId, fuelId)
-      .then((response) => {
-        if (cancelled) return;
-        const list = extractList(response?.data);
-        const normRaw = list[0];
-        if (!normRaw) {
-          setRate(null);
-          return;
-        }
-        const r = pick(
-          normRaw,
-          [
-            "rate",
-            "norm",
-            "consumption_rate",
-            "fuel_per_100km",
-            "norm_per_100km",
-            "consumption_per_100km",
-            "rate_100km",
-            "norm_100",
-          ],
-          null,
-        );
-        setRate(r !== null ? Number(r) : null);
-      })
-      .catch(() => {
-        if (!cancelled) setRate(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [carId, fuelId]);
-  return rate;
-}
-
-function useLastBalance(carId) {
-  const [lastBalance, setLastBalance] = useState(null);
-  useEffect(() => {
-    if (!carId) {
-      setLastBalance(null);
-      return;
-    }
-    let cancelled = false;
-    apiCost
-      .All(1, 1, {
-        car_id: carId,
-        sortBy: "date",
-        sortOrder: "DESC",
-      })
-      .then((response) => {
-        if (cancelled) return;
-        const list = extractList(response);
-        if (list.length > 0) {
-          const computed = extractComputed(list[0]);
-          setLastBalance(computed.balanceAfter);
-        } else {
-          setLastBalance(0);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLastBalance(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [carId]);
-  return lastBalance;
-}
-
-function NewRowInline({
-  newRow,
-  onChange,
+function DayEntryRow({
+  row,
+  idx,
   onAdd,
   isSaving,
   fuelTypes,
@@ -1100,165 +1111,67 @@ function NewRowInline({
   fuelTypesById,
   disabled,
   selectedCarId,
-  dateAlreadyUsed,
-  existingRecord,
-  onEditExisting,
+  normRatesByFuelId,
+  lastBalance,
 }) {
-  const rowBg = useColorModeValue("primary.50", "whiteAlpha.100");
-  const rowBorder = useColorModeValue("primary.100", "whiteAlpha.200");
-  const fuelMeta = fuelTypesById?.[newRow.fuel_id];
+  const [fuelId, setFuelId] = useState("");
+  const [receivedAmount, setReceivedAmount] = useState("0");
+  const [distance, setDistance] = useState("0");
+  const [isHoliday, setIsHoliday] = useState(false);
+
+  useEffect(() => {
+    if (fuelTypes.length && !fuelId) {
+      setFuelId(fuelTypes[0].id);
+    }
+  }, [fuelTypes, fuelId]);
+
+  const rowBaseBg = idx % 2 === 1 ? "bg" : "surface";
+  const fuelMeta = fuelTypesById?.[fuelId];
   const selectedUnit = fuelMeta?.unit || "litr";
   const estimatedSum =
-    fuelMeta?.price && newRow.received_amount !== ""
-      ? Number(newRow.received_amount) * Number(fuelMeta.price)
+    fuelMeta?.price && receivedAmount !== ""
+      ? Number(receivedAmount) * Number(fuelMeta.price)
       : null;
-  const hasDistance = newRow.distance !== "" && Number(newRow.distance) > 0;
+  const hasDistance = distance !== "";
+  const odometerStart =
+    row.odometer_start !== null && row.odometer_start !== undefined
+      ? row.odometer_start
+      : "";
   const computedOdometerEnd =
-    newRow.odometer_start !== "" && hasDistance
-      ? Number(newRow.odometer_start) + Number(newRow.distance)
+    odometerStart !== "" && hasDistance
+      ? Number(odometerStart) + Number(distance)
       : null;
-  const normRate = useFuelNormRate(selectedCarId, newRow.fuel_id);
+  const normRate =
+    normRatesByFuelId && normRatesByFuelId[fuelId] !== undefined
+      ? normRatesByFuelId[fuelId]
+      : null;
   const estimatedFuelConsumed =
     normRate !== null && hasDistance
-      ? (Number(newRow.distance) * normRate) / 100
+      ? (Number(distance) * normRate) / 100
       : null;
-  const lastBalance = useLastBalance(selectedCarId);
   const computedBalanceAfter =
-    lastBalance !== null && newRow.received_amount !== "" && hasDistance
+    lastBalance !== null && receivedAmount !== "" && hasDistance
       ? Number(lastBalance) +
-        Number(newRow.received_amount) -
+        Number(receivedAmount) -
         (estimatedFuelConsumed || 0)
       : null;
 
- 
-  if (existingRecord) {
-    const {
-      distance: existingDistance,
-      fuelConsumed: existingFuelConsumed,
-      sum: existingSum,
-      balanceAfter: existingBalanceAfter,
-      priceAtTime: existingPriceAtTime,
-      receivedAmount: existingReceivedAmount,
-    } = extractComputed(existingRecord);
-    const existingFuelMeta =
-      fuelTypesById[existingRecord.fuel_id] || existingRecord.fuel || null;
-    const existingFuelUnit =
-      existingRecord.fuel_unit || existingFuelMeta?.unit || "litr";
-    const existingPrice =
-      existingPriceAtTime !== null
-        ? Number(existingPriceAtTime)
-        : existingFuelMeta?.price !== undefined &&
-            existingFuelMeta?.price !== null
-          ? Number(existingFuelMeta.price)
-          : null;
-    const existingDisplaySum =
-      existingSum !== null
-        ? existingSum
-        : existingPrice !== null &&
-            existingReceivedAmount !== null &&
-            existingReceivedAmount !== undefined
-          ? Number(existingReceivedAmount) * existingPrice
-          : null;
+  const isValid = !disabled && !!fuelId && odometerStart !== "";
 
-    return (
-      <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
-        <Td borderColor="border" py={2}>
-          <Input
-            type="date"
-            size="sm"
-            value={newRow.date}
-            onChange={(e) => onChange({ date: e.target.value })}
-            isDisabled={disabled}
-            {...inputStyles}
-          />
-          <Text color="orange.400" fontSize="xs" mt={1}>
-            Bu kunga yozuv mavjud — quyida ko'rsatilmoqda
-          </Text>
-        </Td>
-        <Td borderColor="border">
-          <FuelBadge
-            fuelId={existingRecord.fuel_id}
-            fuelTypesById={fuelTypesById}
-            fallback={existingRecord.fuel}
-          />
-        </Td>
-        <Td isNumeric borderColor="border">
-          <Text fontSize="sm" color="text">
-            {existingReceivedAmount !== null &&
-            existingReceivedAmount !== undefined
-              ? `${formatNumber(existingReceivedAmount)} ${existingFuelUnit}`
-              : "—"}
-          </Text>
-        </Td>
-        <Td isNumeric borderColor="border">
-          <AutoCell
-            value={existingFuelConsumed}
-            unit={existingFuelUnit}
-            tooltip="Backend hisoblagan"
-          />
-        </Td>
-        <Td isNumeric borderColor="border">
-          <AutoCell value={existingRecord.odometer_start} unit="km" />
-        </Td>
-        <Td isNumeric borderColor="border">
-          <AutoCell value={existingRecord.odometer_end} unit="km" />
-        </Td>
-        <Td isNumeric borderColor="border">
-          <Text fontSize="sm" fontWeight="bold" color="text">
-            {existingDistance !== null
-              ? `${formatNumber(existingDistance)} km`
-              : "—"}
-          </Text>
-        </Td>
-        <Td isNumeric borderColor="border">
-          <AutoCell value={existingDisplaySum} unit="so'm" />
-        </Td>
-        <Td isNumeric borderColor="border">
-          <AutoCell value={existingBalanceAfter} unit={existingFuelUnit} />
-        </Td>
-        <Td borderColor="border">
-          <HolidayBadge isHoliday={existingRecord.is_holiday} />
-        </Td>
-        <Td borderColor="border">
-          <Button
-            leftIcon={<Pencil size={14} />}
-            size="sm"
-            variant="outline"
-            colorScheme="blue"
-            borderRadius="md"
-            onClick={() => onEditExisting && onEditExisting(existingRecord)}
-          >
-            Tahrirlash
-          </Button>
-        </Td>
-      </Tr>
-    );
-  }
-
- 
-  const isValid =
-    !disabled &&
-    !dateAlreadyUsed &&
-    !!newRow.date &&
-    !!newRow.fuel_id &&
-    newRow.odometer_start !== "";
+  const handleAdd = () => {
+    onAdd(row.date, {
+      fuel_id: fuelId,
+      odometer_start: odometerStart,
+      distance,
+      received_amount: receivedAmount,
+      is_holiday: isHoliday,
+    });
+  };
 
   return (
-    <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
-      <Td borderColor="border" py={2}>
-        <Input
-          type="date"
-          size="sm"
-          value={newRow.date}
-          onChange={(e) => onChange({ date: e.target.value })}
-          isDisabled={disabled}
-          {...inputStyles}
-        />
-        {dateAlreadyUsed && (
-          <Text color="red.400" fontSize="xs" mt={1}>
-            Bu kunga allaqachon yozuv kiritilgan
-          </Text>
-        )}
+    <Tr bg={rowBaseBg} borderBottomWidth="1px" borderColor="border">
+      <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
+        {formatDate(row.date)}
       </Td>
       <Td borderColor="border">
         {fuelTypesLoading ? (
@@ -1266,9 +1179,9 @@ function NewRowInline({
         ) : (
           <Select
             size="sm"
-            value={newRow.fuel_id}
-            onChange={(e) => onChange({ fuel_id: e.target.value })}
-            isDisabled={disabled}
+            value={fuelId}
+            onChange={(e) => setFuelId(e.target.value)}
+            isDisabled={disabled || isSaving}
             {...inputStyles}
           >
             {fuelTypes.length === 0 && <option value="">—</option>}
@@ -1282,9 +1195,9 @@ function NewRowInline({
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
-          value={newRow.received_amount}
-          onChange={(val) => onChange({ received_amount: val })}
-          isDisabled={disabled}
+          value={receivedAmount}
+          onChange={(val) => setReceivedAmount(val)}
+          isDisabled={disabled || isSaving}
           unit={selectedUnit}
           size="sm"
         />
@@ -1298,9 +1211,9 @@ function NewRowInline({
       </Td>
       <Td isNumeric borderColor="border">
         <AutoCell
-          value={newRow.odometer_start}
+          value={odometerStart}
           unit="km"
-          tooltip="Avtomatik: oldingi yozuvning oxirgi spidometridan olinadi"
+          tooltip="Avtomatik: shu kunning boshlang'ich spidometri"
         />
       </Td>
       <Td isNumeric borderColor="border">
@@ -1312,9 +1225,9 @@ function NewRowInline({
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
-          value={newRow.distance}
-          onChange={(val) => onChange({ distance: val })}
-          isDisabled={disabled}
+          value={distance}
+          onChange={(val) => setDistance(val)}
+          isDisabled={disabled || isSaving}
           unit="km"
           size="sm"
         />
@@ -1333,10 +1246,10 @@ function NewRowInline({
         <HStack spacing={2}>
           <Switch
             size="sm"
-            isChecked={newRow.is_holiday}
-            onChange={(e) => onChange({ is_holiday: e.target.checked })}
+            isChecked={isHoliday}
+            onChange={(e) => setIsHoliday(e.target.checked)}
             colorScheme="accent"
-            isDisabled={disabled}
+            isDisabled={disabled || isSaving}
           />
           <Text fontSize="xs" color="textSecondary" whiteSpace="nowrap">
             Dam olish
@@ -1344,17 +1257,16 @@ function NewRowInline({
         </HStack>
       </Td>
       <Td borderColor="border">
-        <Button
-          leftIcon={<Check size={16} />}
+        <IconButton
+          aria-label="Saqlash"
+          icon={<Plus size={16} />}
           size="sm"
           colorScheme="primary"
           borderRadius="md"
-          onClick={onAdd}
+          onClick={handleAdd}
           isDisabled={disabled || !isValid}
           isLoading={isSaving}
-        >
-          Saqlash
-        </Button>
+        />
       </Td>
     </Tr>
   );
@@ -1368,10 +1280,12 @@ function EditRowInline({
   isSaving,
   fuelTypesById,
   selectedCarId,
+  normRatesByFuelId,
+  lastBalance,
 }) {
   const rowBg = useColorModeValue("accent.50", "whiteAlpha.150");
   const rowBorder = useColorModeValue("accent.100", "whiteAlpha.300");
-  const hasDistance = editForm.distance !== "" && Number(editForm.distance) > 0;
+  const hasDistance = editForm.distance !== "";
   const computedOdometerEnd =
     editForm.odometer_start !== "" && hasDistance
       ? Number(editForm.odometer_start) + Number(editForm.distance)
@@ -1386,12 +1300,14 @@ function EditRowInline({
     fuelMeta?.price && editForm.received_amount !== ""
       ? Number(editForm.received_amount) * Number(fuelMeta.price)
       : null;
-  const normRate = useFuelNormRate(selectedCarId, editForm.fuel_id);
+  const normRate =
+    normRatesByFuelId && normRatesByFuelId[editForm.fuel_id] !== undefined
+      ? normRatesByFuelId[editForm.fuel_id]
+      : null;
   const estimatedFuelConsumed =
     normRate !== null && hasDistance
       ? (Number(editForm.distance) * normRate) / 100
       : null;
-  const lastBalance = useLastBalance(selectedCarId);
   const computedBalanceAfter =
     lastBalance !== null && editForm.received_amount !== "" && hasDistance
       ? Number(lastBalance) +
@@ -1548,7 +1464,6 @@ function DataRow({
 
   const sumIsComputedLocally = sum === null && displaySum !== null;
 
- 
   const showActions = editingId === null;
 
   const dateTooltipParts = [];
@@ -1887,10 +1802,8 @@ function ExpenseTable({
   loading,
   fuelTypesById,
   noCarSelected,
-  newRow,
-  onNewRowChange,
-  onAddRow,
-  isSavingRow,
+  onAddForDate,
+  savingDate,
   fuelTypes,
   fuelTypesLoading,
   editingId,
@@ -1902,9 +1815,8 @@ function ExpenseTable({
   isSavingEdit,
   onDelete,
   selectedCarId,
-  canAddNew,
-  dateAlreadyUsed,
-  existingRecordForNewDate,
+  normRatesByFuelId,
+  lastBalance,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1951,6 +1863,26 @@ function ExpenseTable({
   );
 
   const renderRow = (row, idx) => {
+    if (row.__placeholder) {
+      return (
+        <DayEntryRow
+          key={`empty-${row.date}`}
+          row={row}
+          idx={idx}
+          onAdd={onAddForDate}
+          isSaving={savingDate === row.date}
+          fuelTypes={fuelTypes}
+          fuelTypesLoading={fuelTypesLoading}
+          fuelTypesById={fuelTypesById}
+          disabled={
+            noCarSelected || (savingDate !== null && savingDate !== row.date)
+          }
+          selectedCarId={selectedCarId}
+          normRatesByFuelId={normRatesByFuelId}
+          lastBalance={lastBalance}
+        />
+      );
+    }
     if (row.id === editingId) {
       return (
         <EditRowInline
@@ -1962,6 +1894,8 @@ function ExpenseTable({
           isSaving={isSavingEdit}
           fuelTypesById={fuelTypesById}
           selectedCarId={selectedCarId}
+          normRatesByFuelId={normRatesByFuelId}
+          lastBalance={lastBalance}
         />
       );
     }
@@ -1991,7 +1925,7 @@ function ExpenseTable({
                 </Td>
               </Tr>
             ))}
-          {!loading && items.length === 0 && !canAddNew && (
+          {!loading && items.length === 0 && (
             <Tr>
               <Td colSpan={11} border="none" p={0}>
                 <EmptyState />
@@ -1999,22 +1933,6 @@ function ExpenseTable({
             </Tr>
           )}
           {!loading && items.map((row, i) => renderRow(row, i))}
-          {canAddNew && (
-            <NewRowInline
-              newRow={newRow}
-              onChange={onNewRowChange}
-              onAdd={onAddRow}
-              isSaving={isSavingRow}
-              fuelTypes={fuelTypes}
-              fuelTypesLoading={fuelTypesLoading}
-              fuelTypesById={fuelTypesById}
-              disabled={noCarSelected}
-              selectedCarId={selectedCarId}
-              dateAlreadyUsed={dateAlreadyUsed}
-              existingRecord={existingRecordForNewDate}
-              onEditExisting={onStartEdit}
-            />
-          )}
         </Tbody>
       </Table>
     </TableContainer>
@@ -2108,11 +2026,9 @@ const DEFAULT_FILTERS = {
   sortOrder: "ASC",
 };
 
-
 function CostPage() {
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
-  // tanlangan mashina localStorage'dan tiklanadi
   const [selectedCarId, setSelectedCarId] = useState(() =>
     loadCarIdFromStorage(),
   );
@@ -2159,6 +2075,20 @@ function CostPage() {
     saveCarIdToStorage(selectedCarId);
   }, [selectedCarId]);
 
+  // Scroll holatini saqlash va tiklash
+  useEffect(() => {
+    const savedScroll = localStorage.getItem(SCROLL_KEY);
+    if (savedScroll) {
+      window.scrollTo(0, Number(savedScroll));
+    }
+
+    const handleScroll = () => {
+      localStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const [filters, setFilters] = useState(() => {
     const stored = loadFiltersFromStorage();
     return stored ? { ...DEFAULT_FILTERS, ...stored } : DEFAULT_FILTERS;
@@ -2199,63 +2129,10 @@ function CostPage() {
     loadFuelTypes();
   }, [loadFuelTypes]);
 
-  const [newRow, setNewRow] = useState(() => ({
-    ...EMPTY_NEW_ROW,
-    date: getMonthStartDateFor(filters.year, filters.month),
-  }));
-  const [isSavingRow, setIsSavingRow] = useState(false);
+  const [savingDate, setSavingDate] = useState(null);
 
-const isCurrentMonthSelected =
-  filters.year === getCurrentYear() && filters.month === getCurrentMonth();
-
-  const existingDatesSet = useMemo(() => {
-    const set = new Set();
-    expenses.forEach((e) => {
-      if (e?.date) set.add(String(e.date).slice(0, 10));
-    });
-    return set;
-  }, [expenses]);
-
-  const newRowDateAlreadyUsed = existingDatesSet.has(newRow.date);
-
-
-  const existingRecordForNewDate = useMemo(() => {
-    if (!newRow.date) return null;
-    return (
-      expenses.find(
-        (e) => String(e?.date || "").slice(0, 10) === newRow.date,
-      ) || null
-    );
-  }, [expenses, newRow.date]);
-
-  const daysInSelectedMonth = getDaysInMonth(filters.year, filters.month);
-
-
-  const isMonthFullyFilled = useMemo(() => {
-    if (!expenses || expenses.length === 0) return false;
-    return existingDatesSet.size >= daysInSelectedMonth;
-  }, [existingDatesSet, daysInSelectedMonth, expenses]);
-
-
- const canAddNew = !isMonthFullyFilled;
-
-  
-  useEffect(() => {
-    setNewRow((prev) => ({
-      ...prev,
-      date: getMonthStartDateFor(filters.year, filters.month),
-    }));
-  }, [filters.year, filters.month]);
-
-  useEffect(() => {
-    if (fuelTypes.length && !newRow.fuel_id) {
-      setNewRow((prev) => ({ ...prev, fuel_id: fuelTypes[0].id }));
-    }
-  }, [fuelTypes, newRow.fuel_id]);
-
-  const updateNewRow = (patch) => {
-    setNewRow((prev) => ({ ...prev, ...patch }));
-  };
+  const isCurrentMonthSelected =
+    filters.year === getCurrentYear() && filters.month === getCurrentMonth();
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
@@ -2274,143 +2151,145 @@ const isCurrentMonthSelected =
     setExpenses([]);
     setTotals([]);
     setEditingId(null);
-    setNewRow({
-      ...EMPTY_NEW_ROW,
-      date: getMonthStartDateFor(filters.year, filters.month),
-      fuel_id: newRow.fuel_id || (fuelTypes.length > 0 ? fuelTypes[0].id : ""),
-    });
   };
 
   const loadExpenses = useCallback(async () => {
     if (!selectedCarId) {
       setExpenses([]);
+      setTotals([]);
       return;
     }
     setLoading(true);
     try {
-      const { date_from, date_to } = getMonthDateRange(
-        filters.year,
-        filters.month,
+      const month = monthToYYYYMM(filters.year, filters.month);
+      const data = await apiCost.CarMonthlyReport(
+        selectedCarId,
+        month,
+        filters.fuel_id || undefined,
       );
-      const data = await apiCost.All(1, FETCH_LIMIT, {
-        car_id: selectedCarId,
-        fuel_id: filters.fuel_id,
-        date_from,
-        date_to,
-        sortBy: filters.sortBy,
-        sortOrder: filters.sortOrder,
+      const days = pick(data, ["days"], []);
+      const rows = buildMonthDayRows(days);
+
+      rows.sort((a, b) => {
+        const da = new Date(a.date).getTime() || 0;
+        const db = new Date(b.date).getTime() || 0;
+        return filters.sortOrder === "DESC" ? db - da : da - db;
       });
-      setExpenses(extractList(data));
-      setTotals(extractTotals(data).map(normalizeTotal));
+
+      setExpenses(rows);
+      const totalsRaw = computeTotalsFromExpenses(rows, fuelTypesById);
+      setTotals(totalsRaw.map(normalizeTotal));
     } catch (err) {
       toastService.error("Ro'yxatni yuklab bo'lmadi: " + err.message);
+      setExpenses([]);
       setTotals([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedCarId, filters]);
+  }, [selectedCarId, filters, fuelTypesById]);
 
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses]);
 
-  useEffect(() => {
-    if (!selectedCarId) return;
-    if (loading) return;
+  const [normRatesByFuelId, setNormRatesByFuelId] = useState({});
 
-    let computedStart = null;
-
-    if (expenses && expenses.length > 0) {
-      const latest = expenses.reduce((a, b) => {
-        const da = new Date(a.date).getTime() || 0;
-        const db = new Date(b.date).getTime() || 0;
-        return db > da ? b : a;
-      });
-
-      if (latest?.odometer_end !== undefined && latest?.odometer_end !== null) {
-        computedStart = String(latest.odometer_end);
-      } else {
-        const { distance } = extractComputed(latest);
-        const startVal = pick(latest, ["odometer_start"], null);
-        const distVal =
-          distance !== null ? distance : pick(latest, ["mileage"], null);
-        if (startVal !== null && distVal !== null) {
-          computedStart = String(Number(startVal) + Number(distVal));
-        }
-      }
+  const loadNormRates = useCallback(async () => {
+    if (!selectedCarId || fuelTypes.length === 0) {
+      setNormRatesByFuelId({});
+      return;
     }
-
-    if (computedStart === null) {
-      const car = cars.find((c) => c.id === selectedCarId);
-      if (car?.odometer !== undefined && car?.odometer !== null) {
-        computedStart = String(car.odometer);
-      }
-    }
-
-    if (computedStart !== null) {
-      setNewRow((prev) =>
-        prev.odometer_start === computedStart
-          ? prev
-          : { ...prev, odometer_start: computedStart },
+    try {
+      const entries = await Promise.all(
+        fuelTypes.map(async (f) => {
+          try {
+            const response = await apiCars.AllNorms(1, 1, selectedCarId, f.id);
+            const list = extractList(response?.data);
+            const normRaw = list[0];
+            if (!normRaw) return [f.id, null];
+            const r = pick(
+              normRaw,
+              [
+                "rate",
+                "norm",
+                "consumption_rate",
+                "fuel_per_100km",
+                "norm_per_100km",
+                "consumption_per_100km",
+                "rate_100km",
+                "norm_100",
+              ],
+              null,
+            );
+            return [f.id, r !== null ? Number(r) : null];
+          } catch (e) {
+            return [f.id, null];
+          }
+        }),
       );
+      setNormRatesByFuelId(Object.fromEntries(entries));
+    } catch (e) {
+      setNormRatesByFuelId({});
     }
-  }, [selectedCarId, expenses, loading, cars]);
+  }, [selectedCarId, fuelTypes]);
+
   useEffect(() => {
-    if (!selectedCarId) return;
-    if (loading) return;
+    loadNormRates();
+  }, [loadNormRates]);
 
-    if (expenses && expenses.length > 0) {
-      const latest = expenses.reduce((a, b) => {
-        const da = new Date(a.date).getTime() || 0;
-        const db = new Date(b.date).getTime() || 0;
-        return db > da ? b : a;
-      });
-      if (latest?.date) {
-        const nextDate = new Date(latest.date);
-        nextDate.setDate(nextDate.getDate() + 1);
-        const nextDateStr = formatAsInputDate(nextDate);
-        setNewRow((prev) =>
-          prev.date === nextDateStr ? prev : { ...prev, date: nextDateStr },
-        );
-        return;
-      }
+  const [lastBalance, setLastBalance] = useState(null);
+
+  const loadLastBalance = useCallback(async () => {
+    if (!selectedCarId) {
+      setLastBalance(null);
+      return;
     }
+    try {
+      const response = await apiCost.All(1, 1, {
+        car_id: selectedCarId,
+        sortBy: "date",
+        sortOrder: "DESC",
+      });
+      const list = extractList(response);
+      if (list.length > 0) {
+        const computed = extractComputed(list[0]);
+        setLastBalance(computed.balanceAfter);
+      } else {
+        setLastBalance(0);
+      }
+    } catch (e) {
+      setLastBalance(null);
+    }
+  }, [selectedCarId]);
 
-    const monthStartStr = getMonthStartDateFor(filters.year, filters.month);
-    setNewRow((prev) =>
-      prev.date === monthStartStr ? prev : { ...prev, date: monthStartStr },
-    );
-  }, [selectedCarId, expenses, loading, filters.year, filters.month]);
+  useEffect(() => {
+    loadLastBalance();
+  }, [loadLastBalance]);
 
-  const handleAddRow = async () => {
+  const handleAddForDate = async (date, values) => {
     if (!selectedCarId) {
       toastService.error("Avval mashinani tanlang");
       return;
     }
 
-    if (!newRow.date || !newRow.fuel_id || newRow.odometer_start === "") {
+    if (!date || !values.fuel_id || values.odometer_start === "") {
       toastService.error(
-        "Barcha maydonlarni to'ldiring: Sana, yoqilg'i turi va boshlang'ich spidometr kerak",
+        "Barcha maydonlarni to'ldiring: yoqilg'i turi va boshlang'ich spidometr kerak",
       );
       return;
     }
 
-    if (isFutureDate(newRow.date)) {
+    if (isFutureDate(date)) {
       toastService.error(
         "Ertangi kun uchun ma'lumot qo'shib bo'lmaydi! Faqat bugungi yoki o'tgan kunlar uchun yozuv qo'shishingiz mumkin.",
       );
       return;
     }
-    const [enteredYear, enteredMonth] = newRow.date.split("-").map(Number);
-    if (enteredYear !== filters.year || enteredMonth !== filters.month) {
-      toastService.error(
-        "Faqat tanlangan oy ichidagi sanaga yozuv qo'shishingiz mumkin",
-      );
-      return;
-    }
 
     if (
-      expenses.some((e) => String(e?.date || "").slice(0, 10) === newRow.date)
+      expenses.some(
+        (e) => !e.__placeholder && String(e?.date || "").slice(0, 10) === date,
+      )
     ) {
       toastService.error(
         "Bu sanaga allaqachon xarajat kiritilgan. Bir kunga faqat bitta yozuv qo'shish mumkin.",
@@ -2418,43 +2297,36 @@ const isCurrentMonthSelected =
       return;
     }
 
-    const odometerStart = Number(newRow.odometer_start);
-    const distanceValue = newRow.distance === "" ? 0 : Number(newRow.distance);
-    const odometerEnd = odometerStart + distanceValue;
+    const distanceValue = values.distance === "" ? 0 : Number(values.distance);
 
-    setIsSavingRow(true);
+    setSavingDate(date);
     const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
 
     try {
       await apiCost.Create({
         car_id: selectedCarId,
-        fuel_id: newRow.fuel_id,
-        date: newRow.date,
+        fuel_id: values.fuel_id,
+        date,
         mileage: distanceValue,
         received_amount:
-          newRow.received_amount === "" ? 0 : Number(newRow.received_amount),
-        is_holiday: newRow.is_holiday,
+          values.received_amount === "" ? 0 : Number(values.received_amount),
+        is_holiday: values.is_holiday,
         note: "",
       });
       toastService.dismiss(loadingToastId);
       toastService.success("Yangi xarajat qo'shildi");
-
-      setNewRow({
-        ...EMPTY_NEW_ROW,
-        date: newRow.date,
-        fuel_id: newRow.fuel_id,
-        odometer_start: String(odometerEnd),
-      });
       await loadExpenses();
       await loadCars();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
     } finally {
-      setIsSavingRow(false);
+      setSavingDate(null);
     }
   };
+
   const startEdit = (row) => {
+    if (row.__placeholder) return;
     setEditingId(row.id);
     const { distance, receivedAmount } = extractComputed(row);
     setEditForm({
@@ -2495,11 +2367,6 @@ const isCurrentMonthSelected =
       return;
     }
 
-    if (Number(editForm.distance) <= 0) {
-      toastService.error("Yurgan km 0 dan katta bo'lishi kerak");
-      return;
-    }
-
     setIsSavingEdit(true);
     const loadingToastId = toastService.loading("Yangilanmoqda...");
 
@@ -2524,6 +2391,7 @@ const isCurrentMonthSelected =
   };
 
   const askDelete = (row) => {
+    if (row.__placeholder) return;
     setDeleteTarget(row);
     deleteDialog.onOpen();
   };
@@ -2642,19 +2510,33 @@ const isCurrentMonthSelected =
         </Flex>
       </Box>
 
-      <CarSelector
-        filters={filters}
-        onFilterChange={updateFilters}
-        fuelTypes={fuelTypes}
-        fuelTypesLoading={fuelTypesLoading}
-        cars={cars}
-        carsLoading={carsLoading}
-        selectedCarId={selectedCarId}
-        onCarChange={handleCarChange}
-        showCards={showCards}
-        onExportExcel={handleExportExcel}
-        isExporting={isExporting}
-      />
+      {/* STICKY FILTER CARD */}
+      <Box
+        position="sticky"
+        top={0}
+        zIndex="sticky"
+        bg="bg"
+        pt={2}
+        pb={2}
+        mb={6}
+        borderBottomWidth="1px"
+        borderColor="border"
+        boxShadow="sm"
+      >
+        <CarSelector
+          filters={filters}
+          onFilterChange={updateFilters}
+          fuelTypes={fuelTypes}
+          fuelTypesLoading={fuelTypesLoading}
+          cars={cars}
+          carsLoading={carsLoading}
+          selectedCarId={selectedCarId}
+          onCarChange={handleCarChange}
+          showCards={showCards}
+          onExportExcel={handleExportExcel}
+          isExporting={isExporting}
+        />
+      </Box>
 
       <Box
         bg="surface"
@@ -2671,10 +2553,8 @@ const isCurrentMonthSelected =
           loading={loading}
           fuelTypesById={fuelTypesById}
           noCarSelected={noCarSelected}
-          newRow={newRow}
-          onNewRowChange={updateNewRow}
-          onAddRow={handleAddRow}
-          isSavingRow={isSavingRow}
+          onAddForDate={handleAddForDate}
+          savingDate={savingDate}
           fuelTypes={fuelTypes}
           fuelTypesLoading={fuelTypesLoading}
           editingId={editingId}
@@ -2686,9 +2566,6 @@ const isCurrentMonthSelected =
           isSavingEdit={isSavingEdit}
           onDelete={askDelete}
           selectedCarId={selectedCarId}
-          canAddNew={canAddNew}
-          dateAlreadyUsed={newRowDateAlreadyUsed}
-          existingRecordForNewDate={existingRecordForNewDate}
         />
       </Box>
 
