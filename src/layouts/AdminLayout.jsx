@@ -6,9 +6,9 @@ import { Car, Fuel, HomeIcon, User, Users, Wallet2, Wrench } from "lucide-react"
 
 const links = [
   { label: "Bosh sahifa", to: "/superadmin/dashboard", icon: HomeIcon },
-  { label: "Xarajatlar", to: "/superadmin/costs", icon: Wallet2 },
+  { label: "Yoqilg'i xarajatlari", to: "/superadmin/costs", icon: Wallet2 },
   { label: "Avtomobillar", to: "/superadmin/cars", icon: Car },
-  { label: "Zapchastlar", to: "/superadmin/zapchast", icon: Wrench },
+  { label: "Ehtiyot xarajatlari", to: "/superadmin/zapchast", icon: Wrench },
   { label: "Xodimlar", to: "/superadmin/admins", icon: Users },
   { label: "Yoqilg'i", to: "/superadmin/fuel", icon: Fuel },
   { label: "Adminlar", to: "/superadmin/admin", icon: User },
