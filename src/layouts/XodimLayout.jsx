@@ -6,9 +6,9 @@ import { Car, Fuel, HomeIcon, Users, Wallet2, Wrench } from "lucide-react";
 
 const links = [
   { label: "Bosh sahifa", to: "/admin/dashboard", icon: HomeIcon },
-  { label: "Xarajatlar", to: "/admin/costs", icon: Wallet2 },
+  { label: "Yoqilg'i xarajatlari", to: "/admin/costs", icon: Wallet2 },
   { label: "Avtomobillar", to: "/admin/cars", icon: Car },
-  { label: "Zapchastlar", to: "/admin/zapchast", icon: Wrench },
+  { label: "Zapchast xarajatlari", to: "/admin/zapchast", icon: Wrench },
    { label: "Xodimlar", to: "/admin/admins", icon: Users },
   { label: "Yoqilg'i", to: "/admin/fuel", icon: Fuel },
 ];
