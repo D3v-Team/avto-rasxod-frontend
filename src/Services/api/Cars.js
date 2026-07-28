@@ -132,6 +132,17 @@ class apiCars {
 
     return response;
   };
+  static ChangeNorm = async (id, data) => {
+  const response = await $api.patch(
+    `${BASE_URL}/car-fuel-norms/${id}/change-norm`,
+    data,
+    {
+      showSuccessToast: "Yoqilg'i normasi tarixi muvaffaqiyatli o'zgartirildi",
+    }
+  );
+
+  return response;
+};
 }
 
 export { apiCars };

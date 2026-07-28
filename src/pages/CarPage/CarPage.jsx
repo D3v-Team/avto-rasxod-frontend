@@ -60,12 +60,11 @@ import { apiCars } from "../../Services/api/Cars";
 import { apiEmployees } from "../../Services/api/Users";
 import { apiFuel } from "../../Services/api/Fuels";
 import { generateWaybill } from "../../utils/exel";
+import NormModal from "../../components/norms/NormModal";
 
 import toast from "react-hot-toast";
 
 const ACCENT = "#3B82F6";
-
-
 
 const VALID_REGION_CODES = [
   "01",
@@ -108,17 +107,6 @@ const setElectricStatus = (carId, isElectric) => {
   }
 };
 
-const removeElectricStatus = (carId) => {
-  if (!carId) return;
-  try {
-    const map = getElectricMap();
-    delete map[carId];
-    localStorage.setItem(ELECTRIC_STORAGE_KEY, JSON.stringify(map));
-  } catch (error) {
-    console.error("Elektromobil holatini o'chirishda xatolik:", error);
-  }
-};
-
 const initialFormState = {
   name: "",
   plate_number: "",
@@ -133,6 +121,8 @@ const initialNormState = {
   car_id: "",
   fuel_id: "",
   norm_per_100km: "",
+  current_balance: "",
+  effective_from: "",
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -164,6 +154,13 @@ export default function CarPage() {
   const [selectedCar, setSelectedCar] = useState(null);
   const [selectedCarId, setSelectedCarId] = useState(null);
   const [carToDelete, setCarToDelete] = useState(null);
+  const [normModalTab, setNormModalTab] = useState("create");
+  const [normOptions, setNormOptions] = useState([]);
+  const [selectedNormId, setSelectedNormId] = useState(null);
+  const [normListLoading, setNormListLoading] = useState(false);
+  const [historyValue, setHistoryValue] = useState("");
+  const [historyEffectiveFrom, setHistoryEffectiveFrom] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [serverTotalPages, setServerTotalPages] = useState(1);
@@ -553,15 +550,211 @@ export default function CarPage() {
     }
   };
 
-  const handleOpenNormModal = (car) => {
+  const resetNormModalState = () => {
+    setNormModalTab("create");
+    setNormOptions([]);
+    setSelectedNormId(null);
+    setHistoryValue("");
+    setHistoryEffectiveFrom("");
+    setDeleteReason("");
+    setNormFormData({
+      car_id: "",
+      fuel_id: "",
+      norm_per_100km: "",
+      current_balance: "",
+      effective_from: "",
+    });
+  };
+
+  const handleCloseNormModal = () => {
+    onNormClose();
+    setSelectedCar(null);
+    resetNormModalState();
+  };
+
+  const handleOpenNormModal = async (car) => {
     setSelectedCar(car);
     setNormFormData({
       car_id: car.id,
       fuel_id: "",
       norm_per_100km: "",
       current_balance: "",
+      effective_from: "",
     });
+    setNormModalTab("create");
+    setSelectedNormId(null);
+    setHistoryValue("");
+    setHistoryEffectiveFrom("");
+    setDeleteReason("");
+    setNormListLoading(true);
+
+    try {
+      const res = await apiCars.AllNorms(1, 100, car.id);
+      const records = extractRecords(res);
+      setNormOptions(records);
+    } catch (error) {
+      console.error("Normalarni yuklashda xatolik:", error);
+      setNormOptions([]);
+    } finally {
+      setNormListLoading(false);
+    }
+
     onNormOpen();
+  };
+
+  const handleNormFieldChange = (field, value) => {
+    setNormFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSelectNorm = (id) => {
+    const item = normOptions.find((option) => option.id === id);
+    if (!item) return;
+
+    setSelectedNormId(id);
+    setNormFormData({
+      car_id: item.car_id || selectedCar?.id || "",
+      fuel_id: item.fuel_id || item.fuel?.id || "",
+      norm_per_100km: item.norm_per_100km ?? "",
+      current_balance: item.current_balance ?? "",
+      effective_from: item.effective_from || "",
+    });
+  };
+
+  const handleCreateNorm = async () => {
+    if (!selectedCar?.id) return;
+    if (!normFormData.fuel_id || !normFormData.norm_per_100km) {
+      toast.error("Yoqilg'i turi va norma maydoni to'ldirilishi shart.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const payload = {
+      car_id: selectedCar.id,
+      fuel_id: normFormData.fuel_id,
+      norm_per_100km: Number(normFormData.norm_per_100km),
+      current_balance: Number(normFormData.current_balance || 0),
+      effective_from: normFormData.effective_from || null,
+    };
+
+    try {
+      await apiCars.CreateNorm(payload);
+      handleCloseNormModal();
+      fetchCars(currentPage);
+    } catch (error) {
+      console.error("Norma saqlashda xatolik:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditNorm = async () => {
+    if (!selectedNormId) {
+      toast.error("Avval norma tanlang.");
+      return;
+    }
+
+    if (!normFormData.fuel_id || !normFormData.norm_per_100km) {
+      toast.error("Yoqilg'i turi va norma maydoni to'ldirilishi shart.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const payload = {
+      fuel_id: normFormData.fuel_id,
+      norm_per_100km: Number(normFormData.norm_per_100km),
+      current_balance: Number(normFormData.current_balance || 0),
+      effective_from: normFormData.effective_from || null,
+    };
+
+    try {
+      await apiCars.UpdateNorm(selectedNormId, payload);
+      handleCloseNormModal();
+      fetchCars(currentPage);
+    } catch (error) {
+      console.error("Norma yangilashda xatolik:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChangeNormHistory = async () => {
+    if (!selectedNormId) {
+      toast.error("Avval norma tanlang.");
+      return;
+    }
+
+    if (!historyValue) {
+      toast.error("Yangi norma kiritilishi shart.");
+      return;
+    }
+
+    const parsedNorm = Number(historyValue);
+    if (Number.isNaN(parsedNorm)) {
+      toast.error("Yangi norma raqam bo'lishi kerak.");
+      return;
+    }
+
+    if (parsedNorm <= 0) {
+      toast.error("Yangi norma musbat son bo'lishi kerak.");
+      return;
+    }
+
+    if (!historyEffectiveFrom) {
+      toast.error("Amal qilish sanasi kiritilishi shart.");
+      return;
+    }
+
+    if (Number.isNaN(new Date(historyEffectiveFrom).getTime())) {
+      toast.error("Amal qilish sanasi to'g'ri formatda bo'lishi kerak.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiCars.ChangeNorm(selectedNormId, {
+        new_norm_per_100km: parsedNorm,
+        effective_from: historyEffectiveFrom,
+      });
+      setHistoryValue("");
+      setHistoryEffectiveFrom("");
+      handleCloseNormModal();
+      fetchCars(currentPage);
+    } catch (error) {
+      console.error("Norma tarixini o'zgartirishda xatolik:", error);
+      toast.error(
+        error?.response?.data?.message ||
+          "Norma tarixini o'zgartirishda xatolik yuz berdi."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteNorm = async () => {
+    if (!selectedNormId) {
+      toast.error("Avval norma tanlang.");
+      return;
+    }
+
+    // if (!deleteReason.trim()) {
+    //   toast.error("O'chirish sababi kiritilishi shart.");
+    //   return;
+    // }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiCars.DeleteNorm(selectedNormId);
+      handleCloseNormModal();
+      fetchCars(currentPage);
+    } catch (error) {
+      console.error("Norma o'chirishda xatolik:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenWaybillModal = (car) => {
@@ -609,33 +802,6 @@ export default function CarPage() {
       toast.error(error?.message || "Yo'l varaqasini yaratishda xatolik yuz berdi");
     } finally {
       setIsGeneratingWaybill(false);
-    }
-  };
-
-  const handleNormSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!normFormData.fuel_id || !normFormData.norm_per_100km) {
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const payload = {
-      car_id: normFormData.car_id,
-      fuel_id: normFormData.fuel_id,
-      norm_per_100km: Number(normFormData.norm_per_100km),
-      current_balance: Number(normFormData.current_balance),
-      effective_from: normFormData.effective_from
-    };
-
-    try {
-      await apiCars.CreateNorm(payload);
-      onNormClose();
-    } catch (error) {
-      console.error("Norma saqlashda xatolik:", error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -930,7 +1096,7 @@ export default function CarPage() {
                         whiteSpace="nowrap"
                         w="13%"
                       >
-                        Yoqilg'i qoldig'i
+                        Norma
                       </Th>
 
                       <Th
@@ -1137,7 +1303,6 @@ export default function CarPage() {
                           {car.car_fuel_norm && car.car_fuel_norm.length > 0 ? (
                             <VStack align="start" spacing={1} maxW="100%">
                               {car.car_fuel_norm
-                              
                                 .map((norm, idx) => {
                                   const fuelName =
                                     norm?.fuel?.name || "Yoqilg'i";
@@ -1289,7 +1454,7 @@ export default function CarPage() {
                                 p={1}
                                 minW="130px"
                               >
-                              <MenuItem
+                                <MenuItem
                                   icon={<PanelLeftRightDashed size={14} />}
                                   fontSize={"xs"}
                                   fontWeight={"500"}
@@ -1758,7 +1923,6 @@ export default function CarPage() {
         </ModalContent>
       </Modal>
 
-
       {/* YO'L VARAQASI MODAL */}
       <Modal isOpen={isWaybillOpen} onClose={handleCloseWaybillModal} size="md" isCentered>
         <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
@@ -1946,7 +2110,7 @@ export default function CarPage() {
             py={3.5}
             px={6}
           >
-           <Button
+            <Button
               variant="ghost"
               color="textSecondary"
               _hover={{ bg: "blackAlpha.50", color: "text" }}
@@ -1958,7 +2122,7 @@ export default function CarPage() {
             >
               Bekor qilish
             </Button>
-           <Button
+            <Button
               bg={ACCENT}
               color="white"
               _hover={{ bg: "#2563EB" }}
@@ -1977,245 +2141,31 @@ export default function CarPage() {
         </ModalContent>
       </Modal>
 
-      {/* NORMA O'RNATISH MODAL */}
-      <Modal isOpen={isNormOpen} onClose={onNormClose} size="md" isCentered>
-        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
-        <ModalContent
-          borderRadius="2xl"
-          boxShadow="2xl"
-          bg="surface"
-          overflow="hidden"
-        >
-          <ModalHeader
-            borderBottom="1px solid"
-            borderColor="border"
-            py={4}
-            px={6}
-          >
-            <HStack spacing={2.5}>
-              <Center
-                w="32px"
-                h="32px"
-                borderRadius="lg"
-                bg={`${ACCENT}15`}
-                color={ACCENT}
-              >
-                <Fuel size={18} />
-              </Center>
-              <Text fontSize="md" fontWeight="700" color="text">
-                Yoqilg'i normasini belgilash
-              </Text>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton
-            mt={1.5}
-            mr={1}
-            color="textSecondary"
-            borderRadius="lg"
-          />
-
-          <ModalBody bg="bg" p={6}>
-            <VStack
-              spacing={4}
-              as="form"
-              id="norm-form"
-              onSubmit={handleNormSubmit}
-            >
-              <Box
-                w="full"
-                p={3.5}
-                borderRadius="xl"
-                bg="surface"
-                border="1px solid"
-                borderColor="border"
-                boxShadow="xs"
-              >
-                <Text
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                  letterSpacing="0.5px"
-                  mb={1}
-                >
-                  Tanlangan avtomobil
-                </Text>
-                <Flex align="center" justify="space-between">
-                  <Text fontWeight="600" color="text" fontSize="sm">
-                    {selectedCar?.name || "Avtomobil tanlanmagan"}
-                  </Text>
-
-                  {selectedCar?.plate_number && (
-                    <Badge
-                      bg="white"
-                      color="black"
-                      border="1px solid #000"
-                      borderRadius="base"
-                      px={1.5}
-                      py={0.5}
-                      fontFamily="monospace"
-                      fontSize="xs"
-                      fontWeight="800"
-                      letterSpacing="0.5px"
-                    >
-                      {(() => {
-                        const { region, main } = formatPlateNumber(
-                          selectedCar.plate_number,
-                        );
-                        return `${region} ${main}`.trim();
-                      })()}
-                    </Badge>
-                  )}
-                </Flex>
-              </Box>
-
-              <FormControl isRequired>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                  letterSpacing="0.5px"
-                >
-                  Yoqilg'i turi
-                </FormLabel>
-                <Select
-                  placeholder="Yonilg'ini tanlang"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  size="md"
-                  focusBorderColor={ACCENT}
-                  _hover={{ borderColor: ACCENT }}
-                  value={normFormData.fuel_id}
-                  onChange={(e) =>
-                    setNormFormData({
-                      ...normFormData,
-                      fuel_id: e.target.value,
-                    })
-                  }
-                >
-                  {fuels.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name || f.type}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl isRequired>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                  letterSpacing="0.5px"
-                >
-                  100 km uchun norma (Litr / Kub / KW)
-                </FormLabel>
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="Masalan: 8.5"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  size="md"
-                  focusBorderColor={ACCENT}
-                  _hover={{ borderColor: ACCENT }}
-                  value={normFormData.norm_per_100km}
-                  onChange={(e) =>
-                    setNormFormData({
-                      ...normFormData,
-                      norm_per_100km: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Dastlabki yoqilgisi</FormLabel>
-                <Input
-                  type="number"
-                  placeholder="Masalan: 10 Litr"
-                  bg={"surface"}
-                  color={"text"}
-                  borderColor={"border"}
-                  borderRadius={"xl"}
-                  size={"md"}
-                  focusBorderColor={ACCENT}
-                  _hover={{ borderColor: ACCENT }}
-                  value={normFormData.current_balance}
-                  onChange={(e) => {
-                    setNormFormData({
-                      ...normFormData,
-                      current_balance: e.target.value,
-                    });
-                  }}
-                />
-              </FormControl>
-             <FormControl>
-  <FormLabel>Muddati</FormLabel>
-  <Input
-    type="date"
-    bg={"surface"}
-    color={"text"}
-    borderColor={"border"}
-    borderRadius={"xl"}
-    size={"md"}
-    focusBorderColor={ACCENT}
-    _hover={{ borderColor: ACCENT }}
-    value={normFormData.effective_from}
-    onChange={(e) => {
-      setNormFormData({
-        ...normFormData,
-        effective_from: e.target.value,
-      });
-    }}
-  />
-</FormControl>
-            </VStack>
-          </ModalBody>
-
-          <ModalFooter
-            borderTop="1px solid"
-            borderColor="border"
-            bg="surface"
-            py={3.5}
-            px={6}
-          >
-            <Button
-              variant="ghost"
-              color="textSecondary"
-              _hover={{ bg: "blackAlpha.50", color: "text" }}
-              mr={3}
-              onClick={onNormClose}
-              size="sm"
-              borderRadius="xl"
-              isDisabled={isSubmitting}
-            >
-              Bekor qilish
-            </Button>
-            <Button
-              bg={ACCENT}
-              color="white"
-              _hover={{ bg: "#2563EB", transform: "translateY(-1px)" }}
-              _active={{ bg: "#1D4ED8", transform: "translateY(0)" }}
-              type="submit"
-              form="norm-form"
-              isLoading={isSubmitting}
-              size="sm"
-              px={6}
-              borderRadius="xl"
-              boxShadow="sm"
-              transition="all 0.15s ease"
-            >
-              Normani saqlash
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <NormModal
+        isOpen={isNormOpen}
+        onClose={handleCloseNormModal}
+        car={selectedCar}
+        fuels={fuels}
+        activeTab={normModalTab}
+        onTabChange={setNormModalTab}
+        formData={normFormData}
+        onFieldChange={handleNormFieldChange}
+        onCreate={handleCreateNorm}
+        onEdit={handleEditNorm}
+        onHistory={handleChangeNormHistory}
+        onDelete={handleDeleteNorm}
+        isSubmitting={isSubmitting}
+        isLoading={normListLoading}
+        normOptions={normOptions}
+        selectedNormId={selectedNormId}
+        onSelectNorm={handleSelectNorm}
+        historyValue={historyValue}
+        onHistoryChange={setHistoryValue}
+        historyEffectiveFrom={historyEffectiveFrom}
+        onHistoryEffectiveFromChange={setHistoryEffectiveFrom}
+        deleteReason={deleteReason}
+        onDeleteReasonChange={setDeleteReason}
+      />
 
       {/* DELETE CONFIRM MODAL */}
       <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered size="sm">
