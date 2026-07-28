@@ -99,10 +99,6 @@ function extractList(payload) {
   return [];
 }
 
-// Backend javobi "groups[].cars[]" ko'rinishida guruhlangan holda keladi
-// (har bir guruh — mas'ul shaxs bo'yicha). Jadval uchun barcha guruhlardagi
-// mashinalarni bitta tekis ro'yxatga yig'amiz. Boshqa mumkin bo'lgan
-// (flat) shakllar uchun fallback ham qoldirilgan.
 function extractReportList(response) {
   if (Array.isArray(response?.groups)) {
     return response.groups.flatMap((g) =>
@@ -247,7 +243,6 @@ function Dashboard() {
   const tableHoverBg = useColorModeValue("gray.50", "gray.700");
   const borderColor = useColorModeValue("gray.200", "gray.700");
   const fuelHeaderBg = useColorModeValue("gray.50", "gray.900");
-  // guruhlar orasidagi ajratuvchi (qalinroq) chiziq rangi
   const groupDividerColor = useColorModeValue("gray.400", "gray.500");
   const groupDividerWidth = "2px";
 
@@ -300,10 +295,6 @@ function Dashboard() {
     let cancelled = false;
     setCarsLoading(true);
     apiCars
-      // ✅ TUZATILDI: is_deleted uchun `false` qo'shildi (5-argument).
-      // Avval bu joy bo'sh qoldirilgani sababli keyingi qiymatlar
-      // ("name", "ASC") mos kelmay, driver_id / sortBy ga tushib,
-      // backenddan 400 xatolik qaytarilayotgan edi.
       .All(1, 100, "", true, false, "", "", "name", "ASC")
       .then((response) => {
         if (cancelled) return;
@@ -512,16 +503,11 @@ function Dashboard() {
   }
 
   // Jadvaldagi umumiy ustunlar soni (colSpan hisoblash uchun):
-  // Mashina, Haydovchi, Mas'ul shaxs, Masofa, Umumiy summasi = 5 ta doimiy ustun
-  // + har bir yoqilg'i turi uchun 4 tadan ustun (boshi, sarf miqdori, sarf summasi, oxiri)
-  const fuelGroupCount = fuelColumns.length || 1;
-  const totalColSpan = 5 + fuelColumns.length * 4;
-
-  // guruh chegarasidagi ustunga qalinroq chap chiziq berish uchun umumiy props
-  const groupDividerProps = {
-    borderLeftWidth: groupDividerWidth,
-    borderLeftColor: groupDividerColor,
-  };
+  // 4 ta doimiy ustun (Mashina, Haydovchi, Mas'ul shaxs, Masofa)
+  // + har bir yoqilg'i turi uchun 4 tadan (boshi, sarf miqdori, sarf summasi, oxiri)
+  // + 1 ta umumiy summa
+  // fuelGroupCount o'rniga to'g'ridan-to'g'ri fuelColumns.length ishlatiladi
+  const totalColSpan = 4 + fuelColumns.length * 4 + 1;
 
   return (
     <Box p={{ base: 4, md: 6 }} bg={pageBg} minH="100vh">
@@ -681,11 +667,17 @@ function Dashboard() {
             <Table variant="simple" size="sm" bg={tableBg}>
               <Thead>
                 <Tr>
+                  {/* Sticky ustunlar: Mashina, Haydovchi, Mas'ul shaxs, Masofa */}
                   <Th
                     rowSpan={2}
                     color={subTextColor}
                     borderColor={borderColor}
                     verticalAlign="bottom"
+                    position="sticky"
+                    left={0}
+                    zIndex={3}
+                    bg={cardBg}
+                    minW="150px"
                   >
                     Mashina
                   </Th>
@@ -694,6 +686,11 @@ function Dashboard() {
                     color={subTextColor}
                     borderColor={borderColor}
                     verticalAlign="bottom"
+                    position="sticky"
+                    left="150px"
+                    zIndex={3}
+                    bg={cardBg}
+                    minW="150px"
                   >
                     Haydovchi
                   </Th>
@@ -702,6 +699,11 @@ function Dashboard() {
                     color={subTextColor}
                     borderColor={borderColor}
                     verticalAlign="bottom"
+                    position="sticky"
+                    left="300px"
+                    zIndex={3}
+                    bg={cardBg}
+                    minW="150px"
                   >
                     Mas'ul shaxs
                   </Th>
@@ -710,30 +712,37 @@ function Dashboard() {
                     color={subTextColor}
                     borderColor={borderColor}
                     verticalAlign="bottom"
+                    position="sticky"
+                    left="450px"
+                    zIndex={3}
+                    bg={cardBg}
+                    minW="100px"
                   >
                     Masofa (km)
                   </Th>
 
                   {/* --- OY BOSHIDAGI QOLDIQ (har bir yoqilg'i turi bo'yicha) --- */}
                   <Th
-                    colSpan={fuelGroupCount}
+                    colSpan={fuelColumns.length}
                     textAlign="center"
                     color={headingColor}
                     borderColor={borderColor}
                     bg={fuelHeaderBg}
-                    {...groupDividerProps}
+                    borderLeftWidth={groupDividerWidth}
+                    borderLeftColor={groupDividerColor}
                   >
                     Oy boshidagi qoldiq
                   </Th>
 
                   {/* --- OY DAVOMIDA SARFLANGAN (miqdor + summa, har bir yoqilg'i turi bo'yicha) --- */}
                   <Th
-                    colSpan={fuelGroupCount * 2}
+                    colSpan={fuelColumns.length * 2}
                     textAlign="center"
                     color={headingColor}
                     borderColor={borderColor}
                     bg={fuelHeaderBg}
-                    {...groupDividerProps}
+                    borderLeftWidth={groupDividerWidth}
+                    borderLeftColor={groupDividerColor}
                   >
                     Oy davomida sarflangan
                   </Th>
@@ -743,19 +752,21 @@ function Dashboard() {
                     color={subTextColor}
                     borderColor={borderColor}
                     verticalAlign="bottom"
-                    {...groupDividerProps}
+                    borderLeftWidth={groupDividerWidth}
+                    borderLeftColor={groupDividerColor}
                   >
                     Umumiy summasi
                   </Th>
 
                   {/* --- OY OXIRIDAGI QOLDIQ (har bir yoqilg'i turi bo'yicha) --- */}
                   <Th
-                    colSpan={fuelGroupCount}
+                    colSpan={fuelColumns.length}
                     textAlign="center"
                     color={headingColor}
                     borderColor={borderColor}
                     bg={fuelHeaderBg}
-                    {...groupDividerProps}
+                    borderLeftWidth={groupDividerWidth}
+                    borderLeftColor={groupDividerColor}
                   >
                     Oy oxiridagi qoldiq
                   </Th>
@@ -768,7 +779,10 @@ function Dashboard() {
                       color={subTextColor}
                       borderColor={borderColor}
                       fontSize="10px"
-                      {...(idx === 0 ? groupDividerProps : {})}
+                      borderLeftWidth={idx === 0 ? groupDividerWidth : 0}
+                      borderLeftColor={
+                        idx === 0 ? groupDividerColor : "transparent"
+                      }
                     >
                       {f.fuel_name} ({f.fuel_unit})
                     </Th>
@@ -781,7 +795,10 @@ function Dashboard() {
                         color={subTextColor}
                         borderColor={borderColor}
                         fontSize="10px"
-                        {...(idx === 0 ? groupDividerProps : {})}
+                        borderLeftWidth={idx === 0 ? groupDividerWidth : 0}
+                        borderLeftColor={
+                          idx === 0 ? groupDividerColor : "transparent"
+                        }
                       >
                         {f.fuel_name} sarfi ({f.fuel_unit})
                       </Th>
@@ -802,7 +819,10 @@ function Dashboard() {
                       color={subTextColor}
                       borderColor={borderColor}
                       fontSize="10px"
-                      {...(idx === 0 ? groupDividerProps : {})}
+                      borderLeftWidth={idx === 0 ? groupDividerWidth : 0}
+                      borderLeftColor={
+                        idx === 0 ? groupDividerColor : "transparent"
+                      }
                     >
                       {f.fuel_name} ({f.fuel_unit})
                     </Th>
@@ -832,16 +852,49 @@ function Dashboard() {
                 ) : (
                   orgReportData.map((row, idx) => (
                     <Tr key={idx} _hover={{ bg: tableHoverBg }}>
-                      <Td borderColor={borderColor} color={headingColor}>
+                      {/* Sticky ustunlar */}
+                      <Td
+                        borderColor={borderColor}
+                        color={headingColor}
+                        position="sticky"
+                        left={0}
+                        zIndex={1}
+                        bg={tableBg}
+                        minW="150px"
+                      >
                         {row.car_name}
                       </Td>
-                      <Td borderColor={borderColor} color={headingColor}>
+                      <Td
+                        borderColor={borderColor}
+                        color={headingColor}
+                        position="sticky"
+                        left="150px"
+                        zIndex={1}
+                        bg={tableBg}
+                        minW="150px"
+                      >
                         {row.driver_name}
                       </Td>
-                      <Td borderColor={borderColor} color={headingColor}>
+                      <Td
+                        borderColor={borderColor}
+                        color={headingColor}
+                        position="sticky"
+                        left="300px"
+                        zIndex={1}
+                        bg={tableBg}
+                        minW="150px"
+                      >
                         {row.responsible_name}
                       </Td>
-                      <Td borderColor={borderColor} color={headingColor}>
+                      <Td
+                        borderColor={borderColor}
+                        color={headingColor}
+                        position="sticky"
+                        left="450px"
+                        zIndex={1}
+                        bg={tableBg}
+                        minW="100px"
+                      >
                         {formatNumberSimple(row.total_mileage)} km
                       </Td>
 
@@ -853,7 +906,10 @@ function Dashboard() {
                             key={`start-${f.fuel_id}`}
                             borderColor={borderColor}
                             color={headingColor}
-                            {...(fIdx === 0 ? groupDividerProps : {})}
+                            borderLeftWidth={fIdx === 0 ? groupDividerWidth : 0}
+                            borderLeftColor={
+                              fIdx === 0 ? groupDividerColor : "transparent"
+                            }
                           >
                             {rf ? formatNumberSimple(rf.start_balance) : "-"}
                           </Td>
@@ -869,7 +925,12 @@ function Dashboard() {
                               key={`consumed-${f.fuel_id}`}
                               borderColor={borderColor}
                               color={headingColor}
-                              {...(fIdx === 0 ? groupDividerProps : {})}
+                              borderLeftWidth={
+                                fIdx === 0 ? groupDividerWidth : 0
+                              }
+                              borderLeftColor={
+                                fIdx === 0 ? groupDividerColor : "transparent"
+                              }
                             >
                               {rf
                                 ? formatNumberSimple(rf.consumed_amount)
@@ -890,7 +951,8 @@ function Dashboard() {
                         borderColor={borderColor}
                         color={headingColor}
                         fontWeight="semibold"
-                        {...groupDividerProps}
+                        borderLeftWidth={groupDividerWidth}
+                        borderLeftColor={groupDividerColor}
                       >
                         {formatSum(rowTotalSum(row))}
                       </Td>
@@ -903,7 +965,10 @@ function Dashboard() {
                             key={`end-${f.fuel_id}`}
                             borderColor={borderColor}
                             color={headingColor}
-                            {...(fIdx === 0 ? groupDividerProps : {})}
+                            borderLeftWidth={fIdx === 0 ? groupDividerWidth : 0}
+                            borderLeftColor={
+                              fIdx === 0 ? groupDividerColor : "transparent"
+                            }
                           >
                             {rf ? formatNumberSimple(rf.end_balance) : "-"}
                           </Td>
