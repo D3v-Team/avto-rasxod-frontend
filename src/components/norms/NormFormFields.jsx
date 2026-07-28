@@ -57,7 +57,7 @@ export default function NormFormFields({
           textTransform="uppercase"
           letterSpacing="0.5px"
         >
-          100 km uchun norma (Litr / Kub / KW)
+          100 km uchun norma 
         </FormLabel>
         <Input
           type="number"
@@ -127,17 +127,7 @@ export default function NormFormFields({
         />
       </FormControl>
 
-      <Box
-        p={3}
-        borderRadius="xl"
-        bg="whiteAlpha.50"
-        border="1px solid"
-        borderColor="border"
-      >
-        <Text fontSize="xs" fontWeight="600" color="textSecondary">
-          Qayd: agar yoqilg&apos;i miqdori bo&apos;sh qolsa, u keyinchalik to&apos;ldiriladi.
-        </Text>
-      </Box>
+     
     </VStack>
   );
 }
