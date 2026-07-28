@@ -112,7 +112,7 @@ const initialFormState = {
   plate_number: "",
   responsible_employee_id: "",
   driver_id: "",
-  speedometer: "",
+  odometer: "",
   is_electric: false,
   is_active: true,
 };
@@ -323,12 +323,12 @@ export default function CarPage() {
               ? car.responsible_employee.id
               : car.responsible_employee_id || "",
 
-          speedometer: Number(car.speedometer || 0),
+          odometer: Number(car.odometer || 0),
           is_electric: isElectric,
           is_active:
             car.is_active !== undefined ? Boolean(car.is_active) : true,
-          car_fuel_norm: Array.isArray(car.car_fuel_norm)
-            ? car.car_fuel_norm
+          car_fuel_norms: Array.isArray(car.car_fuel_norms)
+            ? car.car_fuel_norms
             : [],
         };
       });
@@ -459,7 +459,7 @@ export default function CarPage() {
       plate_number: car.plate_number || "",
       responsible_employee_id: car.responsible_employee_id || "",
       driver_id: car.driver_id || "",
-      speedometer: car.speedometer || "",
+      odometer: car.odometer || "",
       is_electric: Boolean(car.is_electric),
       is_active: car.is_active ?? true,
     });
@@ -522,7 +522,7 @@ export default function CarPage() {
       plate_number: formData.plate_number,
       responsible_employee_id: formData.responsible_employee_id || null,
       driver_id: formData.driver_id || null,
-      speedometer: Number(formData.speedometer) || 0,
+      odometer: Number(formData.odometer) || 0,
       is_electric: Boolean(formData.is_electric),
       is_active: Boolean(formData.is_active),
     };
@@ -726,7 +726,7 @@ export default function CarPage() {
       console.error("Norma tarixini o'zgartirishda xatolik:", error);
       toast.error(
         error?.response?.data?.message ||
-          "Norma tarixini o'zgartirishda xatolik yuz berdi."
+          "Norma tarixini o'zgartirishda xatolik yuz berdi.",
       );
     } finally {
       setIsSubmitting(false);
@@ -799,7 +799,9 @@ export default function CarPage() {
       handleCloseWaybillModal();
     } catch (error) {
       console.error("Yo'l varaqasini generatsiya qilishda xatolik:", error);
-      toast.error(error?.message || "Yo'l varaqasini yaratishda xatolik yuz berdi");
+      toast.error(
+        error?.message || "Yo'l varaqasini yaratishda xatolik yuz berdi",
+      );
     } finally {
       setIsGeneratingWaybill(false);
     }
@@ -1290,48 +1292,46 @@ export default function CarPage() {
                               fontWeight="600"
                               whiteSpace="nowrap"
                             >
-                              {car.speedometer
-                                ? car.speedometer.toLocaleString("uz-UZ")
+                              {car.odometer
+                                ? car.odometer.toLocaleString("uz-UZ")
                                 : 0}{" "}
                               km
                             </Text>
                           </HStack>
                         </Td>
 
-                        {/* 6. YOQILG'I QOLDIG'I */}
-                        <Td borderColor="border" px={3} py={2.5}>
-                          {car.car_fuel_norm && car.car_fuel_norm.length > 0 ? (
-                            <VStack align="start" spacing={1} maxW="100%">
-                              {car.car_fuel_norm
-                                .map((norm, idx) => {
-                                  const fuelName =
-                                    norm?.fuel?.name || "Yoqilg'i";
-                                  const balance = Number(
-                                    norm?.norm_per_100km || 0,
-                                  ).toFixed(1);
 
-                                  return (
-                                    <HStack
-                                      key={idx}
-                                      spacing={1}
-                                      px={1.5}
-                                      py={0.5}
-                                      borderRadius="md"
-                                      bg="blue.50"
-                                      color="blue.700"
-                                      border="1px solid"
-                                      borderColor="blue.100"
-                                      fontSize="10px"
-                                      fontWeight="600"
-                                      w="fit-content"
-                                    >
-                                      <Fuel size={10} />
-                                      <Text lineHeight="1" whiteSpace="nowrap">
-                                        {fuelName}: <b>{balance}</b>
-                                      </Text>
-                                    </HStack>
-                                  );
-                                })}
+                        <Td borderColor="border" px={3} py={2.5}>
+                          {car.car_fuel_norms && car.car_fuel_norms.length > 0 ? (
+                            <VStack align="start" spacing={1} maxW="100%">
+                              {car.car_fuel_norms.map((norm, idx) => {
+                                const fuelName = norm?.fuel?.name || "Yoqilg'i";
+                                const balance = Number(
+                                  norm?.norm_per_100km || 0,
+                                ).toFixed(1);
+
+                                return (
+                                  <HStack
+                                    key={idx}
+                                    spacing={1}
+                                    px={1.5}
+                                    py={0.5}
+                                    borderRadius="md"
+                                    bg="blue.50"
+                                    color="blue.700"
+                                    border="1px solid"
+                                    borderColor="blue.100"
+                                    fontSize="10px"
+                                    fontWeight="600"
+                                    w="fit-content"
+                                  >
+                                    <Fuel size={10} />
+                                    <Text lineHeight="1" whiteSpace="nowrap">
+                                      {fuelName}: <b>{balance}</b>
+                                    </Text>
+                                  </HStack>
+                                );
+                              })}
                             </VStack>
                           ) : (
                             <Text
@@ -1847,7 +1847,7 @@ export default function CarPage() {
                 </FormLabel>
                 <Input
                   type="number"
-                  name="speedometer"
+                  name="odometer"
                   placeholder="0"
                   bg="surface"
                   color="text"
@@ -1856,7 +1856,7 @@ export default function CarPage() {
                   size="md"
                   focusBorderColor={ACCENT}
                   _hover={{ borderColor: ACCENT }}
-                  value={formData.speedometer}
+                  value={formData.odometer}
                   onChange={handleChange}
                 />
               </FormControl>
@@ -1924,9 +1924,19 @@ export default function CarPage() {
       </Modal>
 
       {/* YO'L VARAQASI MODAL */}
-      <Modal isOpen={isWaybillOpen} onClose={handleCloseWaybillModal} size="md" isCentered>
+      <Modal
+        isOpen={isWaybillOpen}
+        onClose={handleCloseWaybillModal}
+        size="md"
+        isCentered
+      >
         <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
-        <ModalContent borderRadius="2xl" boxShadow="2xl" bg="surface" overflow="hidden">
+        <ModalContent
+          borderRadius="2xl"
+          boxShadow="2xl"
+          bg="surface"
+          overflow="hidden"
+        >
           <ModalHeader
             borderBottom="1px solid"
             borderColor="border"
@@ -1960,21 +1970,27 @@ export default function CarPage() {
                   Avtomobil ma'lumotlari
                 </Text>
                 <VStack align="start" spacing={1}>
-                  <Text fontSize="sm" color="text">
-                    <b>Nomi:</b> {selectedWaybillCar?.name}
-                  </Text>
-                  <Text fontSize="sm" color="text">
-                    <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
-                  </Text>
-                  <Text fontSize="sm" color="text">
-                    <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
-                  </Text>
-                  <Text fontSize="sm" color="text">
-                    <b>Mas'ul xodim:</b> {selectedWaybillCar?.responsible_name}
-                  </Text>
-                  <Text fontSize="sm" color="text">
-                    <b>Speedometer:</b> {selectedWaybillCar?.speedometer} km
-                  </Text>
+                  <HStack spacing={4}>
+                    <Text fontSize="sm" color="text">
+                      <b>Nomi:</b> {selectedWaybillCar?.name}
+                    </Text>
+                    <Text fontSize="sm" color="text">
+                      <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
+                    </Text>
+                  </HStack>
+                  <HStack spacing={4}>
+                    <Text fontSize="sm" color="text">
+                      <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
+                    </Text>
+                    <Text fontSize="sm" color="text">
+                      <b>Mas'ul xodim:</b>{" "}
+                      {selectedWaybillCar?.responsible_name}
+                    </Text>
+                   
+                  </HStack>
+                   <Text fontSize="sm" color="text">
+                      <b>Speedometer:</b> {selectedWaybillCar?.odometer} km
+                    </Text>
                 </VStack>
               </Box>
 
