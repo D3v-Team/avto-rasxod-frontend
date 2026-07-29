@@ -1036,7 +1036,6 @@ function CarSelector({
   isExporting,
 }) {
   return (
-    // mb={6} ni olib tashladik — endi tashqi wrapper boshqaradi
     <Box w="100%">
       <Box
         bg="surface"
@@ -1095,9 +1094,7 @@ function CarSelector({
 }
 
 // Oyning har bir "bo'sh" (xarajatsiz) kuni uchun to'g'ridan-to'g'ri jadval
-// qatorida kiritish formasi. Sana shu kunga qattiq bog'langan (o'zgartirib
-// bo'lmaydi), spidometr boshi backend tomonidan hisoblab beriladi — foydalanuvchi
-// faqat yoqilg'i turi, olingan miqdor va yurgan km ni kiritadi.
+// qatorida kiritish formasi.
 function DayEntryRow({
   row,
   idx,
@@ -1253,6 +1250,8 @@ function DayEntryRow({
   );
 }
 
+// Mavjud yozuvni tahrirlash qatori. Endi yoqilg'i turi ham Select orqali
+// o'zgartiriladi (avval faqat statik Badge sifatida ko'rsatilardi).
 function EditRowInline({
   editForm,
   onChange,
@@ -1260,6 +1259,8 @@ function EditRowInline({
   onCancel,
   isSaving,
   fuelTypesById,
+  fuelTypes,
+  fuelTypesLoading,
   selectedCarId,
   normRatesByFuelId,
   lastBalance,
@@ -1272,6 +1273,7 @@ function EditRowInline({
       ? Number(editForm.odometer_start) + Number(editForm.distance)
       : null;
   const isValid =
+    editForm.fuel_id !== "" &&
     editForm.odometer_start !== "" &&
     hasDistance &&
     editForm.received_amount !== "";
@@ -1308,20 +1310,30 @@ function EditRowInline({
         />
       </Td>
       <Td borderColor="border">
-        <Badge
-          colorScheme={fuelMeta?.colorScheme || "neutral"}
-          borderRadius="md"
-          px={2.5}
-          py={1}
-          fontWeight="bold"
-        >
-          {fuelMeta?.label || editForm.fuel_id || "—"}
-        </Badge>
+        {fuelTypesLoading ? (
+          <Skeleton h="32px" borderRadius="md" />
+        ) : (
+          <Select
+            size="sm"
+            value={editForm.fuel_id}
+            onChange={(e) => onChange({ fuel_id: e.target.value })}
+            isDisabled={isSaving}
+            {...inputStyles}
+          >
+            {fuelTypes.length === 0 && <option value="">—</option>}
+            {fuelTypes.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </Select>
+        )}
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
           value={editForm.received_amount}
           onChange={(val) => onChange({ received_amount: val })}
+          isDisabled={isSaving}
           unit={selectedUnit}
           size="sm"
         />
@@ -1339,6 +1351,7 @@ function EditRowInline({
         <UnitNumberInput
           value={editForm.distance}
           onChange={(val) => onChange({ distance: val })}
+          isDisabled={isSaving}
           unit="km"
           size="sm"
         />
@@ -1356,6 +1369,7 @@ function EditRowInline({
             isChecked={editForm.is_holiday}
             onChange={(e) => onChange({ is_holiday: e.target.checked })}
             colorScheme="accent"
+            isDisabled={isSaving}
           />
           <Text fontSize="xs" color="textSecondary" whiteSpace="nowrap">
             Dam olish
@@ -1809,6 +1823,8 @@ function ExpenseTable({
           onCancel={onCancelEdit}
           isSaving={isSavingEdit}
           fuelTypesById={fuelTypesById}
+          fuelTypes={fuelTypes}
+          fuelTypesLoading={fuelTypesLoading}
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           lastBalance={lastBalance}
@@ -2014,11 +2030,6 @@ function CostPage() {
     return stored ? { ...DEFAULT_FILTERS, ...stored } : DEFAULT_FILTERS;
   });
 
-  // Xom ma'lumot: backenddan kelgan "days" massivi, hech qanday hisob-kitobsiz.
-  // Qatorlarni tayyorlash (buildMonthDayRows/sort) va statistikani hisoblash
-  // (totals) endi bu state'dan kelib chiqib FAQAT frontendda (useMemo bilan)
-  // amalga oshiriladi — shu tufayli fuelTypes/fuelTypesById o'zgarishi
-  // backendga takroriy so'rov yuborishga OLIB KELMAYDI.
   const [rawDays, setRawDays] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fuelTypes, setFuelTypes] = useState([]);
@@ -2077,13 +2088,6 @@ function CostPage() {
     setEditingId(null);
   };
 
-  // MUHIM TUZATISH: bu funksiya endi faqat [selectedCarId, filters.year,
-  // filters.month, filters.fuel_id] ga bog'liq — butun `filters` obyektiga
-  // yoki `fuelTypesById` ga EMAS. Avval `fuelTypesById` dependency bo'lgani
-  // uchun sahifa ochilganda backendga "car-monthly-report" so'rovi 2 marta
-  // yuborilardi: 1) komponent mount bo'lganda (fuelTypes hali bo'sh),
-  // 2) yoqilg'i turlari yuklanib, fuelTypesById yangilangach. Endi bu
-  // qayta so'rov butunlay yo'qoladi.
   const loadExpenses = useCallback(async () => {
     if (!selectedCarId) {
       setRawDays([]);
@@ -2111,8 +2115,6 @@ function CostPage() {
     loadExpenses();
   }, [loadExpenses]);
 
-  // Qatorlarni tayyorlash va tartiblash — sof frontend hisob-kitob,
-  // hech qanday tarmoq so'rovini keltirib chiqarmaydi.
   const expenses = useMemo(() => {
     const rows = buildMonthDayRows(rawDays);
     rows.sort((a, b) => {
@@ -2123,8 +2125,6 @@ function CostPage() {
     return rows;
   }, [rawDays, filters.sortOrder]);
 
-  // Statistika (jami) — fuelTypesById yuklanib/o'zgarib tursa ham bu yerda
-  // faqat qayta hisoblanadi, backendga qayta murojaat qilinmaydi.
   const totals = useMemo(() => {
     const totalsRaw = computeTotalsFromExpenses(expenses, fuelTypesById);
     return totalsRaw.map(normalizeTotal);
@@ -2133,13 +2133,6 @@ function CostPage() {
   const [normRatesByFuelId, setNormRatesByFuelId] = useState({});
   const [normRatesLoading, setNormRatesLoading] = useState(false);
 
-  // Eslatma: har bir yoqilg'i turi uchun alohida "car-fuel-norms" so'rovi
-  // yuboriladi, chunki joriy backend endpointi (AllNorms) bitta mashina +
-  // bitta yoqilg'i turi kesimida ishlaydi va mashinaga biriktirilgan
-  // normalarni bittalab qaytaradi. Agar backendda "bitta mashina uchun
-  // BARCHA normalar" qaytaradigan alohida endpoint mavjud bo'lsa (masalan,
-  // fuel_id parametrisiz chaqirilganda), bu yerni bitta so'rovga tushirish
-  // mumkin — hozircha xavfsiz tomondan qoldirildi.
   const loadNormRates = useCallback(async () => {
     if (!selectedCarId || fuelTypes.length === 0) {
       setNormRatesByFuelId({});
@@ -2186,10 +2179,6 @@ function CostPage() {
     loadNormRates();
   }, [loadNormRates]);
 
-  // Faqat shu mashinaga biriktirilgan (norma belgilangan) yoqilg'i turlari.
-  // Agar hali yuklanayotgan bo'lsa yoki mashina uchun birorta ham norma
-  // topilmasa, foydalanuvchi noto'g'ri tanlov qilmasligi uchun barcha
-  // turlarni ko'rsatamiz (fallback).
   const carFuelTypes = useMemo(() => {
     if (!selectedCarId) return fuelTypes;
     const assigned = fuelTypes.filter(
@@ -2315,14 +2304,18 @@ function CostPage() {
     setEditForm(EMPTY_EDIT_FORM);
   };
 
+  // Endi fuel_id ham validatsiya qilinadi va Update so'roviga qo'shib
+  // yuboriladi — foydalanuvchi yozuv uchun yoqilg'i turini ham
+  // o'zgartira oladi.
   const saveEdit = async () => {
     if (!editingId) return;
     if (
+      editForm.fuel_id === "" ||
       editForm.odometer_start === "" ||
       editForm.distance === "" ||
       editForm.received_amount === ""
     ) {
-      toastService.error("Yurgan km va olingan miqdor kerak");
+      toastService.error("Yoqilg'i turi, yurgan km va olingan miqdor kerak");
       return;
     }
 
@@ -2336,6 +2329,7 @@ function CostPage() {
 
     try {
       await apiCost.Update(editingId, {
+        fuel_id: editForm.fuel_id,
         mileage: Number(editForm.distance),
         received_amount: Number(editForm.received_amount),
         is_holiday: editForm.is_holiday,
