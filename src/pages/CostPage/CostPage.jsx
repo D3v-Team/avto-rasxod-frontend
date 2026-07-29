@@ -570,7 +570,7 @@ function UnitNumberInput({
   size = "sm",
 }) {
   return (
-    <Box position="relative">
+    <Box position="relative" w="100%" minW="88px" flexShrink={0}>
       <NumberInput
         size={size}
         min={0}
@@ -578,11 +578,14 @@ function UnitNumberInput({
         onChange={onChange}
         isDisabled={isDisabled}
         keepWithinRange={false}
+        w="100%"
+        minW="88px"
       >
         <NumberInputField
           placeholder={placeholder}
           textAlign="right"
-          pr="46px"
+          pr="42px"
+          minW="88px"
           {...inputStyles}
         />
       </NumberInput>
@@ -1738,37 +1741,37 @@ function ExpenseTable({
   const header = (
     <Thead bg="bg" position="sticky" top={0} zIndex={1}>
       <Tr>
-        <Th color="textSecondary" borderColor="border" py={4}>
+        <Th color="textSecondary" borderColor="border" py={4} w="8%">
           Sana
         </Th>
-        <Th color="textSecondary" borderColor="border">
+        <Th color="textSecondary" borderColor="border" w="9%">
           Yoqilg'i
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="11%">
           Olingan
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="8%">
           Sarflangan
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="7%">
           Spidometr (boshi)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="7%">
           Spidometr (oxiri)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="10%">
           Yurgan (km)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="10%">
           Summa (so'm)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric>
+        <Th color="textSecondary" borderColor="border" isNumeric w="9%">
           Qoldiq
         </Th>
-        <Th color="textSecondary" borderColor="border">
+        <Th color="textSecondary" borderColor="border" w="13%">
           Holat
         </Th>
-        <Th borderColor="border" w="1%">
+        <Th borderColor="border" w="8%">
           Amallar
         </Th>
       </Tr>
@@ -1827,7 +1830,25 @@ function ExpenseTable({
 
   return (
     <TableContainer w="100%" overflowX="visible">
-      <Table variant="simple" size="sm" w="100%" sx={{ tableLayout: "auto" }}>
+      <Table
+        variant="simple"
+        size="sm"
+        w="100%"
+        sx={{
+          tableLayout: "fixed",
+          "& th": {
+            paddingInlineStart: "8px",
+            paddingInlineEnd: "8px",
+            whiteSpace: "normal",
+          },
+          "& td": {
+            paddingInlineStart: "6px",
+            paddingInlineEnd: "6px",
+            paddingTop: "6px",
+            paddingBottom: "6px",
+          },
+        }}
+      >
         {header}
         <Tbody>
           {loading &&
