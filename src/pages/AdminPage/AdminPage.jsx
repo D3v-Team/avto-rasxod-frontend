@@ -680,7 +680,7 @@ export default function AdminPage() {
                 >
                   <option value="driver">Haydovchi (Driver)</option>
                   <option value="responsible">
-                    Mas'ul xodim (Responsible)
+                    Mas'ul xodim 
                   </option>
                 </Select>
               </FormControl>
