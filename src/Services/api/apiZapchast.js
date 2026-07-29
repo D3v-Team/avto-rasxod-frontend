@@ -38,12 +38,17 @@ class apiZapchast {
     return response.data;
   };
 
-  
-  static ExportExcel = async (date_from, date_to) => {
-    const response = await $api.get("/car-spare-parts-expenses/report/excel", {
-      params: { date_from, date_to },
-      responseType: "blob",
-    });
+  static ExportExcel = async (date_from, date_to, org_name) => {
+    const params = { date_from, date_to };
+    if (org_name) params.org_name = org_name;
+
+    const response = await $api.get(
+      "/car-spare-parts-expenses/report/excel-ledger",
+      {
+        params,
+        responseType: "blob",
+      },
+    );
     return response.data;
   };
 }
