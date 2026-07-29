@@ -40,6 +40,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  SimpleGrid,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -1125,7 +1126,7 @@ export default function CarPage() {
                         whiteSpace="nowrap"
                         w="50px"
                       >
-                        ⋮
+                       
                       </Th>
                     </Tr>
                   </Thead>
@@ -1924,238 +1925,251 @@ export default function CarPage() {
       </Modal>
 
       {/* YO'L VARAQASI MODAL */}
-      <Modal
-        isOpen={isWaybillOpen}
-        onClose={handleCloseWaybillModal}
-        size="md"
-        isCentered
-      >
-        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
-        <ModalContent
-          borderRadius="2xl"
-          boxShadow="2xl"
+     <Modal
+  isOpen={isWaybillOpen}
+  onClose={handleCloseWaybillModal}
+  size="lg" // Ma'lumotlar yonma-yon qulay joylashishi uchun "lg" ga o'zgartirildi
+  isCentered
+>
+  <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
+  <ModalContent
+    borderRadius="2xl"
+    boxShadow="2xl"
+    bg="surface"
+    overflow="hidden"
+  >
+    <ModalHeader
+      borderBottom="1px solid"
+      borderColor="border"
+      fontSize="md"
+      fontWeight="700"
+      color="text"
+      py={3}
+      px={5}
+    >
+      Yo'l varaqasi
+    </ModalHeader>
+    <ModalCloseButton mt={0.5} color="textSecondary" borderRadius="lg" />
+
+    <ModalBody bg="bg" p={4}>
+      <VStack spacing={3} align="stretch">
+        {/* Avtomatik to'ldiriladigan ma'lumotlar (2 ustunda) */}
+        <Box
+          p={3}
+          borderRadius="xl"
           bg="surface"
-          overflow="hidden"
+          border="1px solid"
+          borderColor="border"
         >
-          <ModalHeader
-            borderBottom="1px solid"
-            borderColor="border"
-            fontSize="md"
-            fontWeight="700"
-            color="text"
-            py={4}
-            px={6}
+          <Text
+            fontSize="xs"
+            fontWeight="600"
+            color="textSecondary"
+            textTransform="uppercase"
+            mb={1.5}
           >
-            Yo'l varaqasi
-          </ModalHeader>
-          <ModalCloseButton mt={1} color="textSecondary" borderRadius="lg" />
+            Avtomobil ma'lumotlari
+          </Text>
+          <SimpleGrid columns={2} spacingX={4} spacingY={1}>
+            <Text fontSize="xs" color="text">
+              <b>Nomi:</b> {selectedWaybillCar?.name}
+            </Text>
+            <Text fontSize="xs" color="text">
+              <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
+            </Text>
+            <Text fontSize="xs" color="text">
+              <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
+            </Text>
+            <Text fontSize="xs" color="text">
+              <b>Mas'ul xodim:</b> {selectedWaybillCar?.responsible_name}
+            </Text>
+            <Text fontSize="xs" color="text" gridColumn="span 2">
+              <b>Speedometer:</b> {selectedWaybillCar?.odometer} km
+            </Text>
+          </SimpleGrid>
+        </Box>
 
-          <ModalBody bg="bg" p={6}>
-            <VStack spacing={4} align="stretch">
-              {/* Avtomatik to'ldiriladigan ma'lumotlar */}
-              <Box
-                p={3.5}
-                borderRadius="xl"
-                bg="surface"
-                border="1px solid"
-                borderColor="border"
-              >
-                <Text
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                  mb={2}
-                >
-                  Avtomobil ma'lumotlari
-                </Text>
-                <VStack align="start" spacing={1}>
-                  <HStack spacing={4}>
-                    <Text fontSize="sm" color="text">
-                      <b>Nomi:</b> {selectedWaybillCar?.name}
-                    </Text>
-                    <Text fontSize="sm" color="text">
-                      <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
-                    </Text>
-                  </HStack>
-                  <HStack spacing={4}>
-                    <Text fontSize="sm" color="text">
-                      <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
-                    </Text>
-                    <Text fontSize="sm" color="text">
-                      <b>Mas'ul xodim:</b>{" "}
-                      {selectedWaybillCar?.responsible_name}
-                    </Text>
-                   
-                  </HStack>
-                   <Text fontSize="sm" color="text">
-                      <b>Speedometer:</b> {selectedWaybillCar?.odometer} km
-                    </Text>
-                </VStack>
-              </Box>
-
-              <FormControl isRequired isInvalid={waybillErrors.year}>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                >
-                  Yil
-                </FormLabel>
-                <Input
-                  type="number"
-                  name="year"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  focusBorderColor={ACCENT}
-                  value={waybillForm.year}
-                  onChange={handleWaybillChange}
-                />
-              </FormControl>
-
-              <FormControl isRequired isInvalid={waybillErrors.month}>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                >
-                  Oy
-                </FormLabel>
-                <Select
-                  name="month"
-                  placeholder="Oyni tanlang"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  focusBorderColor={ACCENT}
-                  value={waybillForm.month}
-                  onChange={handleWaybillChange}
-                >
-                  <option value="1">Yanvar</option>
-                  <option value="2">Fevral</option>
-                  <option value="3">Mart</option>
-                  <option value="4">Aprel</option>
-                  <option value="5">May</option>
-                  <option value="6">Iyun</option>
-                  <option value="7">Iyul</option>
-                  <option value="8">Avgust</option>
-                  <option value="9">Sentabr</option>
-                  <option value="10">Oktabr</option>
-                  <option value="11">Noyabr</option>
-                  <option value="12">Dekabr</option>
-                </Select>
-              </FormControl>
-
-              <FormControl isRequired isInvalid={waybillErrors.number}>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                >
-                  Yo'l varaqasi raqami
-                </FormLabel>
-                <Input
-                  name="number"
-                  placeholder="Masalan: 00123"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  focusBorderColor={ACCENT}
-                  value={waybillForm.number}
-                  onChange={handleWaybillChange}
-                />
-              </FormControl>
-
-              <FormControl isRequired isInvalid={waybillErrors.issueDate}>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                >
-                  Berilgan sana
-                </FormLabel>
-                <Input
-                  type="date"
-                  name="issueDate"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  focusBorderColor={ACCENT}
-                  value={waybillForm.issueDate}
-                  onChange={handleWaybillChange}
-                />
-              </FormControl>
-
-              <FormControl isRequired isInvalid={waybillErrors.issueTime}>
-                <FormLabel
-                  fontSize="xs"
-                  fontWeight="600"
-                  color="textSecondary"
-                  textTransform="uppercase"
-                >
-                  Berilgan vaqt
-                </FormLabel>
-                <Input
-                  type="time"
-                  name="issueTime"
-                  bg="surface"
-                  color="text"
-                  borderColor="border"
-                  borderRadius="xl"
-                  focusBorderColor={ACCENT}
-                  value={waybillForm.issueTime}
-                  onChange={handleWaybillChange}
-                />
-              </FormControl>
-            </VStack>
-          </ModalBody>
-
-          <ModalFooter
-            borderTop="1px solid"
-            borderColor="border"
-            bg="surface"
-            py={3.5}
-            px={6}
-          >
-            <Button
-              variant="ghost"
+        {/* Inputlar uchun 2 ustunli tarmoq */}
+        <SimpleGrid columns={2} spacing={3}>
+          {/* Yil */}
+          <FormControl isRequired isInvalid={waybillErrors.year}>
+            <FormLabel
+              fontSize="xs"
+              fontWeight="600"
               color="textSecondary"
-              _hover={{ bg: "blackAlpha.50", color: "text" }}
-              mr={3}
-              onClick={handleCloseWaybillModal}
-              size="sm"
-              borderRadius="xl"
-              isDisabled={isGeneratingWaybill}
+              textTransform="uppercase"
+              mb={1}
             >
-              Bekor qilish
-            </Button>
-            <Button
-              bg={ACCENT}
-              color="white"
-              _hover={{ bg: "#2563EB" }}
-              onClick={handleGenerateWaybill}
-              isLoading={isGeneratingWaybill}
-              loadingText="Yaratilmoqda..."
-              isDisabled={isGeneratingWaybill}
+              Yil
+            </FormLabel>
+            <Input
               size="sm"
-              px={6}
-              borderRadius="xl"
-              boxShadow="sm"
+              type="number"
+              name="year"
+              bg="surface"
+              color="text"
+              borderColor="border"
+              borderRadius="lg"
+              focusBorderColor={ACCENT}
+              value={waybillForm.year}
+              onChange={handleWaybillChange}
+            />
+          </FormControl>
+
+          {/* Oy */}
+          <FormControl isRequired isInvalid={waybillErrors.month}>
+            <FormLabel
+              fontSize="xs"
+              fontWeight="600"
+              color="textSecondary"
+              textTransform="uppercase"
+              mb={1}
             >
-              Excel yuklash
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+              Oy
+            </FormLabel>
+            <Select
+              size="sm"
+              name="month"
+              placeholder="Oyni tanlang"
+              bg="surface"
+              color="text"
+              borderColor="border"
+              borderRadius="lg"
+              focusBorderColor={ACCENT}
+              value={waybillForm.month}
+              onChange={handleWaybillChange}
+            >
+              <option value="1">Yanvar</option>
+              <option value="2">Fevral</option>
+              <option value="3">Mart</option>
+              <option value="4">Aprel</option>
+              <option value="5">May</option>
+              <option value="6">Iyun</option>
+              <option value="7">Iyul</option>
+              <option value="8">Avgust</option>
+              <option value="9">Sentabr</option>
+              <option value="10">Oktabr</option>
+              <option value="11">Noyabr</option>
+              <option value="12">Dekabr</option>
+            </Select>
+          </FormControl>
+
+          {/* Yo'l varaqasi raqami */}
+          <FormControl isRequired isInvalid={waybillErrors.number}>
+            <FormLabel
+              fontSize="xs"
+              fontWeight="600"
+              color="textSecondary"
+              textTransform="uppercase"
+              mb={1}
+            >
+              Yo'l varaqasi raqami
+            </FormLabel>
+            <Input
+              size="sm"
+              name="number"
+              placeholder="Masalan: 00123"
+              bg="surface"
+              color="text"
+              borderColor="border"
+              borderRadius="lg"
+              focusBorderColor={ACCENT}
+              value={waybillForm.number}
+              onChange={handleWaybillChange}
+            />
+          </FormControl>
+
+          {/* Berilgan sana */}
+          <FormControl isRequired isInvalid={waybillErrors.issueDate}>
+            <FormLabel
+              fontSize="xs"
+              fontWeight="600"
+              color="textSecondary"
+              textTransform="uppercase"
+              mb={1}
+            >
+              Berilgan sana
+            </FormLabel>
+            <Input
+              size="sm"
+              type="date"
+              name="issueDate"
+              bg="surface"
+              color="text"
+              borderColor="border"
+              borderRadius="lg"
+              focusBorderColor={ACCENT}
+              value={waybillForm.issueDate}
+              onChange={handleWaybillChange}
+            />
+          </FormControl>
+
+          {/* Berilgan vaqt (To'liq 2-ustunni egallashi yoki 1-ustunda turishi mumkin) */}
+          <FormControl isRequired isInvalid={waybillErrors.issueTime} gridColumn="span 2">
+            <FormLabel
+              fontSize="xs"
+              fontWeight="600"
+              color="textSecondary"
+              textTransform="uppercase"
+              mb={1}
+            >
+              Berilgan vaqt
+            </FormLabel>
+            <Input
+              size="sm"
+              type="time"
+              name="issueTime"
+              bg="surface"
+              color="text"
+              borderColor="border"
+              borderRadius="lg"
+              focusBorderColor={ACCENT}
+              value={waybillForm.issueTime}
+              onChange={handleWaybillChange}
+            />
+          </FormControl>
+        </SimpleGrid>
+      </VStack>
+    </ModalBody>
+
+    <ModalFooter
+      borderTop="1px solid"
+      borderColor="border"
+      bg="surface"
+      py={3}
+      px={5}
+    >
+      <Button
+        variant="ghost"
+        color="textSecondary"
+        _hover={{ bg: "blackAlpha.50", color: "text" }}
+        mr={3}
+        onClick={handleCloseWaybillModal}
+        size="sm"
+        borderRadius="xl"
+        isDisabled={isGeneratingWaybill}
+      >
+        Bekor qilish
+      </Button>
+      <Button
+        bg={ACCENT}
+        color="white"
+        _hover={{ bg: "#2563EB" }}
+        onClick={handleGenerateWaybill}
+        isLoading={isGeneratingWaybill}
+        loadingText="Yaratilmoqda..."
+        isDisabled={isGeneratingWaybill}
+        size="sm"
+        px={6}
+        borderRadius="xl"
+        boxShadow="sm"
+      >
+        Excel yuklash
+      </Button>
+    </ModalFooter>
+  </ModalContent>
+</Modal>
+
 
       <NormModal
         isOpen={isNormOpen}

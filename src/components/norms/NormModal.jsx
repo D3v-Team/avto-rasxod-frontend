@@ -441,7 +441,7 @@ export default function NormModal({
               flexDirection="column"
               h="100%"
             >
-              <TabList bg="gray.800" p={1} borderRadius="xl" gap={1.5} flexShrink={0}>
+              <TabList border={"1px solid"} borderColor={"border"} bg="bg" p={1} borderRadius="xl" gap={1.5} flexShrink={0}>
                 {TAB_CONFIG.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -527,18 +527,8 @@ export default function NormModal({
           </Box>
         </ModalBody>
 
-        <ModalFooter borderTop="1px solid" borderColor="border" bg="surface" py={3} px={6} flexShrink={0}>
-          <Button
-            variant="ghost"
-            color="textSecondary"
-            _hover={{ bg: "whiteAlpha.100", color: "white" }}
-            onClick={onClose}
-            size="sm"
-            borderRadius="xl"
-            isDisabled={isSubmitting}
-          >
-            Yopish
-          </Button>
+        <ModalFooter borderTop="1px solid" borderColor="border" bg="surface" py={5} px={6} flexShrink={0}>
+         
         </ModalFooter>
       </ModalContent>
     </Modal>
