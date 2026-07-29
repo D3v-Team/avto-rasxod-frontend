@@ -75,6 +75,26 @@ const ROLE_LABELS = {
   manager: "Menejerlar",
 };
 
+// Sticky ustunlarning kengliklari (px) — chapdan chapga qarab yig'iladi
+const STICKY_WIDTHS = {
+  car: 170,
+  driver: 170,
+  responsible: 170,
+  mileage: 110,
+};
+const STICKY_LEFT = {
+  car: 0,
+  driver: STICKY_WIDTHS.car,
+  responsible: STICKY_WIDTHS.car + STICKY_WIDTHS.driver,
+  mileage: STICKY_WIDTHS.car + STICKY_WIDTHS.driver + STICKY_WIDTHS.responsible,
+};
+// Sticky blokning umumiy kengligi (soya va bo'linish chizig'i shu yerda tugaydi)
+const STICKY_TOTAL_WIDTH =
+  STICKY_WIDTHS.car +
+  STICKY_WIDTHS.driver +
+  STICKY_WIDTHS.responsible +
+  STICKY_WIDTHS.mileage;
+
 // ------------------- YORDAMCHI FUNKSIYALAR -------------------
 function formatSum(n) {
   return (Number(n) || 0).toLocaleString("ru-RU") + " so'm";
@@ -245,6 +265,9 @@ function Dashboard() {
   const fuelHeaderBg = useColorModeValue("gray.50", "gray.900");
   const groupDividerColor = useColorModeValue("gray.400", "gray.500");
   const groupDividerWidth = "2px";
+  // Sticky blok tugab, scroll boshlanadigan joydagi rangli ajratuvchi chiziq
+  const scrollDividerColor = useColorModeValue("purple.400", "purple.400");
+  const scrollDividerWidth = "3px";
 
   const tooltipContentStyle = {
     borderRadius: "10px",
@@ -506,7 +529,6 @@ function Dashboard() {
   // 4 ta doimiy ustun (Mashina, Haydovchi, Mas'ul shaxs, Masofa)
   // + har bir yoqilg'i turi uchun 4 tadan (boshi, sarf miqdori, sarf summasi, oxiri)
   // + 1 ta umumiy summa
-  // fuelGroupCount o'rniga to'g'ridan-to'g'ri fuelColumns.length ishlatiladi
   const totalColSpan = 4 + fuelColumns.length * 4 + 1;
 
   return (
@@ -657,14 +679,42 @@ function Dashboard() {
         </CardHeader>
 
         <CardBody pt={0}>
+          {/*
+            MUHIM: TableContainer o'zi ham overflow="auto" beradi, lekin sticky
+            pozitsiya to'g'ri ishlashi uchun scroll konteyneri FAQAT bitta
+            bo'lishi kerak. Shuning uchun TableContainer'ga overflowX="auto"
+            beryapmiz va uning ICHIDAGI Table'ga minWidth berib, jadval
+            konteynerdan kengroq bo'lganda scroll paydo bo'ladi.
+          */}
+          
           <TableContainer
-            overflowX="auto"
+            overflowX="scroll"
+            overflowY="hidden"
+            position="relative"
             css={{
-              "&::-webkit-scrollbar": { display: "none" },
-              scrollbarWidth: "none",
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "auto",
+              scrollbarColor: `${scrollDividerColor === "purple.400" ? "#a78bfa" : scrollDividerColor} transparent`,
+              "&::-webkit-scrollbar": {
+                height: "12px",
+                display: "block",
+              },
+              "&::-webkit-scrollbar-track": {
+                background: fuelHeaderBg,
+                borderRadius: "8px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                background: "#a78bfa",
+                borderRadius: "8px",
+                border: "2px solid transparent",
+                backgroundClip: "padding-box",
+              },
+              "&::-webkit-scrollbar-thumb:hover": {
+                background: "#8b5cf6",
+              },
             }}
           >
-            <Table variant="simple" size="sm" bg={tableBg}>
+            <Table variant="simple" size="sm" bg={tableBg} minW="max-content">
               <Thead>
                 <Tr>
                   {/* Sticky ustunlar: Mashina, Haydovchi, Mas'ul shaxs, Masofa */}
@@ -674,10 +724,12 @@ function Dashboard() {
                     borderColor={borderColor}
                     verticalAlign="bottom"
                     position="sticky"
-                    left={0}
-                    zIndex={3}
+                    left={`${STICKY_LEFT.car}px`}
+                    zIndex={4}
                     bg={cardBg}
-                    minW="150px"
+                    w={`${STICKY_WIDTHS.car}px`}
+                    minW={`${STICKY_WIDTHS.car}px`}
+                    maxW={`${STICKY_WIDTHS.car}px`}
                   >
                     Mashina
                   </Th>
@@ -687,10 +739,12 @@ function Dashboard() {
                     borderColor={borderColor}
                     verticalAlign="bottom"
                     position="sticky"
-                    left="150px"
-                    zIndex={3}
+                    left={`${STICKY_LEFT.driver}px`}
+                    zIndex={4}
                     bg={cardBg}
-                    minW="150px"
+                    w={`${STICKY_WIDTHS.driver}px`}
+                    minW={`${STICKY_WIDTHS.driver}px`}
+                    maxW={`${STICKY_WIDTHS.driver}px`}
                   >
                     Haydovchi
                   </Th>
@@ -700,10 +754,12 @@ function Dashboard() {
                     borderColor={borderColor}
                     verticalAlign="bottom"
                     position="sticky"
-                    left="300px"
-                    zIndex={3}
+                    left={`${STICKY_LEFT.responsible}px`}
+                    zIndex={4}
                     bg={cardBg}
-                    minW="150px"
+                    w={`${STICKY_WIDTHS.responsible}px`}
+                    minW={`${STICKY_WIDTHS.responsible}px`}
+                    maxW={`${STICKY_WIDTHS.responsible}px`}
                   >
                     Mas'ul shaxs
                   </Th>
@@ -713,10 +769,14 @@ function Dashboard() {
                     borderColor={borderColor}
                     verticalAlign="bottom"
                     position="sticky"
-                    left="450px"
-                    zIndex={3}
+                    left={`${STICKY_LEFT.mileage}px`}
+                    zIndex={4}
                     bg={cardBg}
-                    minW="100px"
+                    w={`${STICKY_WIDTHS.mileage}px`}
+                    minW={`${STICKY_WIDTHS.mileage}px`}
+                    maxW={`${STICKY_WIDTHS.mileage}px`}
+                    borderRightWidth={scrollDividerWidth}
+                    borderRightColor={scrollDividerColor}
                   >
                     Masofa (km)
                   </Th>
@@ -857,10 +917,13 @@ function Dashboard() {
                         borderColor={borderColor}
                         color={headingColor}
                         position="sticky"
-                        left={0}
-                        zIndex={1}
+                        left={`${STICKY_LEFT.car}px`}
+                        zIndex={2}
                         bg={tableBg}
-                        minW="150px"
+                        w={`${STICKY_WIDTHS.car}px`}
+                        minW={`${STICKY_WIDTHS.car}px`}
+                        maxW={`${STICKY_WIDTHS.car}px`}
+                        _hover={{ bg: tableHoverBg }}
                       >
                         {row.car_name}
                       </Td>
@@ -868,10 +931,13 @@ function Dashboard() {
                         borderColor={borderColor}
                         color={headingColor}
                         position="sticky"
-                        left="150px"
-                        zIndex={1}
+                        left={`${STICKY_LEFT.driver}px`}
+                        zIndex={2}
                         bg={tableBg}
-                        minW="150px"
+                        w={`${STICKY_WIDTHS.driver}px`}
+                        minW={`${STICKY_WIDTHS.driver}px`}
+                        maxW={`${STICKY_WIDTHS.driver}px`}
+                        _hover={{ bg: tableHoverBg }}
                       >
                         {row.driver_name}
                       </Td>
@@ -879,10 +945,13 @@ function Dashboard() {
                         borderColor={borderColor}
                         color={headingColor}
                         position="sticky"
-                        left="300px"
-                        zIndex={1}
+                        left={`${STICKY_LEFT.responsible}px`}
+                        zIndex={2}
                         bg={tableBg}
-                        minW="150px"
+                        w={`${STICKY_WIDTHS.responsible}px`}
+                        minW={`${STICKY_WIDTHS.responsible}px`}
+                        maxW={`${STICKY_WIDTHS.responsible}px`}
+                        _hover={{ bg: tableHoverBg }}
                       >
                         {row.responsible_name}
                       </Td>
@@ -890,10 +959,15 @@ function Dashboard() {
                         borderColor={borderColor}
                         color={headingColor}
                         position="sticky"
-                        left="450px"
-                        zIndex={1}
+                        left={`${STICKY_LEFT.mileage}px`}
+                        zIndex={2}
                         bg={tableBg}
-                        minW="100px"
+                        w={`${STICKY_WIDTHS.mileage}px`}
+                        minW={`${STICKY_WIDTHS.mileage}px`}
+                        maxW={`${STICKY_WIDTHS.mileage}px`}
+                        borderRightWidth={scrollDividerWidth}
+                        borderRightColor={scrollDividerColor}
+                        _hover={{ bg: tableHoverBg }}
                       >
                         {formatNumberSimple(row.total_mileage)} km
                       </Td>

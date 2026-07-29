@@ -38,7 +38,7 @@ import {
   VStack,
   SimpleGrid,
   useColorModeValue,
-  useColorMode, // <-- Qo'shildi: native colorScheme uchun kerak
+  useColorMode,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -79,7 +79,6 @@ const paymentBadgeStyle = {
 
 const formatSum = (n) => Number(n || 0).toLocaleString("uz-UZ");
 
-// Oy nomlari
 const MONTH_NAMES = [
   "Yanvar",
   "Fevral",
@@ -130,20 +129,15 @@ export default function ZapchastPage() {
     onClose: onDeleteClose,
   } = useDisclosure();
 
-  // Dark/Light muhit uchun o'zgaruvchilar
   const exportHoverBg = useColorModeValue(
     "green.50",
     "rgba(52, 211, 153, 0.1)",
   );
-
-  // === YANGI: native <select>/<option> uchun dark-light qiymatlar ===
   const { colorMode } = useColorMode();
   const selectBg = useColorModeValue("#f1f5f9", "#1b253b");
   const selectColor = useColorModeValue("#1e293b", "#f1f5f9");
   const selectBorder = useColorModeValue("#cbd5e1", "#2f3b4a");
   const selectHoverBorder = useColorModeValue("#94a3b8", "#4a5a6e");
-  // Option (ochiladigan ro'yxat) uchun alohida ranglar — bular <option style={}>
-  // orqali beriladi, chunki Chakra sx / _dark bu native popup'ga ta'sir qilmaydi
   const optionBg = useColorModeValue("#ffffff", "#1b253b");
   const optionColor = useColorModeValue("#1e293b", "#f1f5f9");
   const selectArrow = useColorModeValue(
@@ -151,7 +145,6 @@ export default function ZapchastPage() {
     `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2360A5FA' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
   );
 
-  // Yillar ro'yxati (2020 dan kelgusi yilgacha)
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -161,12 +154,10 @@ export default function ZapchastPage() {
     return years;
   }, []);
 
-  // Oy ro'yxati (1-12)
   const monthOptions = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => i + 1);
   }, []);
 
-  // Tanlangan yil va oy asosida dateFrom / dateTo ni yangilash
   useEffect(() => {
     if (filterYear && filterMonth) {
       const year = parseInt(filterYear);
@@ -186,7 +177,6 @@ export default function ZapchastPage() {
     setCurrentPage(1);
   }, [filterYear, filterMonth]);
 
-  // Backenddan xarajatlarni yuklash
   const fetchExpenses = async (
     targetPage = currentPage,
     searchQuery = search,
@@ -298,7 +288,6 @@ export default function ZapchastPage() {
     setCurrentPage(1);
   };
 
-  // Mashinalar ro'yxatini bir marta yuklaymiz
   useEffect(() => {
     (async () => {
       setCarsLoading(true);
@@ -330,7 +319,6 @@ export default function ZapchastPage() {
     })();
   }, []);
 
-  // Miqdor yoki narx o'zgarsa, umumiy narxni avtomatik hisoblaymiz
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
@@ -339,7 +327,6 @@ export default function ZapchastPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.quantity, form.price]);
 
-  // Pagination
   const totalPages = useMemo(
     () => Math.max(1, serverTotalPages),
     [serverTotalPages],
@@ -466,7 +453,6 @@ export default function ZapchastPage() {
     }
   }
 
-  // Excel hisobotini yuklab olish
   async function handleExportExcel() {
     if (!dateFrom || !dateTo) {
       toast.error("Excel hisobotini yuklab olish uchun yil va oyni tanlang");
@@ -581,9 +567,7 @@ export default function ZapchastPage() {
               />
             </InputGroup>
 
-            {/* DARK/LIGHT GA TO'G'RI MOSLASHTIRILGAN YIL VA OY SELECTLARI */}
             <HStack spacing={2} flexShrink={0} alignItems="center">
-              {/* YIL SELECT */}
               <Box position="relative">
                 <Select
                   size="sm"
@@ -592,8 +576,6 @@ export default function ZapchastPage() {
                   value={filterYear}
                   onChange={(e) => handleYearChange(e.target.value)}
                   _focus={{ outline: "none" }}
-                  // MUHIM: native colorScheme — brauzer o'ziga xos
-                  // ochiladigan ro'yxatni (popup) mos rejimda chizadi
                   style={{ colorScheme: colorMode }}
                   sx={{
                     appearance: "none",
@@ -616,8 +598,6 @@ export default function ZapchastPage() {
                     <option
                       key={year}
                       value={year}
-                      // Native <option> — faqat inline style orqali
-                      // (Chakra sx bu yerga ta'sir qilmaydi)
                       style={{ background: optionBg, color: optionColor }}
                     >
                       {year}
@@ -626,7 +606,6 @@ export default function ZapchastPage() {
                 </Select>
               </Box>
 
-              {/* OY SELECT */}
               <Box position="relative">
                 <Select
                   size="sm"
@@ -665,7 +644,6 @@ export default function ZapchastPage() {
                 </Select>
               </Box>
 
-              {/* (SHARTLI) FILTRNI TOZALASH */}
               {(filterYear || filterMonth) && (
                 <Tooltip label="Filtrni tozalash">
                   <IconButton
@@ -681,7 +659,6 @@ export default function ZapchastPage() {
               )}
             </HStack>
 
-            {/* EXCEL YUKLASH TUGMASI */}
             <Button
               leftIcon={<Download size={16} />}
               size="sm"
@@ -769,12 +746,12 @@ export default function ZapchastPage() {
             ) : (
               <Box
                 w="100%"
-                overflow="hidden"
+                overflowX="auto" // <-- FIX: allow horizontal scroll so action column is visible
                 opacity={isFetching ? 0.55 : 1}
                 pointerEvents={isFetching ? "none" : "auto"}
                 transition="opacity 0.15s ease"
               >
-                <Table variant="simple" size="md" w="100%">
+                <Table variant="simple" size="md" w="100%" minWidth="900px">
                   <Thead>
                     <Tr bg="surfBlur">
                       <Th
@@ -853,6 +830,7 @@ export default function ZapchastPage() {
                         letterSpacing="0.5px"
                         borderColor="border"
                         pr={6}
+                        minWidth="100px" // ensure action column has space
                       >
                         Amallar
                       </Th>
@@ -945,11 +923,11 @@ export default function ZapchastPage() {
                                   icon={<Pencil size={15} />}
                                   size="sm"
                                   variant="ghost"
-                                  color="textSecondary"
+                                  color="blue.500" // more visible
                                   borderRadius="md"
                                   _hover={{
-                                    bg: "blackAlpha.50",
-                                    color: "text",
+                                    bg: "blue.50",
+                                    color: "blue.700",
                                   }}
                                   aria-label="Tahrirlash"
                                   onClick={() => openEditModal(part)}
@@ -962,7 +940,10 @@ export default function ZapchastPage() {
                                   variant="ghost"
                                   color="red.500"
                                   borderRadius="md"
-                                  _hover={{ bg: "red.50" }}
+                                  _hover={{
+                                    bg: "red.50",
+                                    color: "red.700",
+                                  }}
                                   aria-label="O'chirish"
                                   onClick={() => confirmDelete(part)}
                                 />
@@ -1076,7 +1057,6 @@ export default function ZapchastPage() {
               onSubmit={handleSave}
             >
               <SimpleGrid columns={2} spacing={4} w="100%">
-                {/* Mashina */}
                 <FormControl isRequired>
                   <FormLabel
                     fontSize="sm"
@@ -1111,7 +1091,6 @@ export default function ZapchastPage() {
                   </Select>
                 </FormControl>
 
-                {/* Ehtiyot qism nomi */}
                 <FormControl isRequired>
                   <FormLabel
                     fontSize="sm"
@@ -1136,7 +1115,6 @@ export default function ZapchastPage() {
               </SimpleGrid>
 
               <SimpleGrid columns={2} spacing={4} w="100%">
-                {/* Birlik */}
                 <FormControl isRequired>
                   <FormLabel
                     fontSize="sm"
@@ -1157,7 +1135,6 @@ export default function ZapchastPage() {
                   />
                 </FormControl>
 
-                {/* Miqdori */}
                 <FormControl>
                   <FormLabel
                     fontSize="sm"
@@ -1182,7 +1159,6 @@ export default function ZapchastPage() {
                   </NumberInput>
                 </FormControl>
 
-                {/* Narxi */}
                 <FormControl>
                   <FormLabel
                     fontSize="sm"
@@ -1207,7 +1183,6 @@ export default function ZapchastPage() {
                   </NumberInput>
                 </FormControl>
 
-                {/* To'lov turi */}
                 <FormControl isRequired>
                   <FormLabel
                     fontSize="sm"
@@ -1242,7 +1217,6 @@ export default function ZapchastPage() {
               </SimpleGrid>
 
               <SimpleGrid columns={2} spacing={4} w="100%" alignItems="end">
-                {/* Sana */}
                 <FormControl isRequired>
                   <FormLabel
                     fontSize="sm"
@@ -1264,7 +1238,6 @@ export default function ZapchastPage() {
                   />
                 </FormControl>
 
-                {/* Umumiy narx — ixcham blok */}
                 <FormControl>
                   <FormLabel
                     fontSize="sm"
@@ -1295,7 +1268,6 @@ export default function ZapchastPage() {
                 </FormControl>
               </SimpleGrid>
 
-              {/* Izoh */}
               <FormControl>
                 <FormLabel
                   fontSize="sm"
