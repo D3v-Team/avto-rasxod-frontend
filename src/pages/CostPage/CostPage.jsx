@@ -30,7 +30,6 @@ import {
   NumberInput,
   NumberInputField,
   Heading,
-  Tooltip,
 } from "@chakra-ui/react";
 import {
   Fuel,
@@ -118,7 +117,6 @@ function monthToYYYYMM(year, month) {
 
 const LS_FILTERS_KEY = "costPage:filters";
 const LS_CAR_KEY = "costPage:selectedCarId";
-const SCROLL_KEY = "costPage:scrollY"; // Scroll holati uchun
 
 function loadFiltersFromStorage() {
   try {
@@ -604,39 +602,30 @@ function UnitNumberInput({
   );
 }
 
-function AutoCell({ value, unit, tooltip }) {
+function AutoCell({ value, unit }) {
   return (
-    <Tooltip label={tooltip} placement="top" hasArrow openDelay={300}>
-      <Text color="textSecondary" fontSize="sm" cursor="default">
-        {value === null || value === undefined || value === ""
-          ? "—"
-          : `${formatNumber(value)}${unit ? ` ${unit}` : ""}`}
-      </Text>
-    </Tooltip>
+    <Text color="textSecondary" fontSize="sm" cursor="default">
+      {value === null || value === undefined || value === ""
+        ? "—"
+        : `${formatNumber(value)}${unit ? ` ${unit}` : ""}`}
+    </Text>
   );
 }
 
-function EstimatedCell({ value, unit, tooltip }) {
+function EstimatedCell({ value, unit }) {
   if (
     value === null ||
     value === undefined ||
     value === "" ||
     Number.isNaN(value)
   ) {
-    return <AutoCell value={null} tooltip={tooltip} />;
+    return <AutoCell value={null} />;
   }
   return (
-    <Tooltip
-      label="Taxminiy (saqlangach aniqlashadi)"
-      placement="top"
-      hasArrow
-      openDelay={300}
-    >
-      <Text color="text" fontSize="sm" fontWeight="semibold" cursor="default">
-        {formatNumber(value)}
-        {unit ? ` ${unit}` : ""}
-      </Text>
-    </Tooltip>
+    <Text color="text" fontSize="sm" fontWeight="semibold" cursor="default">
+      {formatNumber(value)}
+      {unit ? ` ${unit}` : ""}
+    </Text>
   );
 }
 
@@ -1044,6 +1033,7 @@ function CarSelector({
   isExporting,
 }) {
   return (
+    // mb={6} ni olib tashladik — endi tashqi wrapper boshqaradi
     <Box w="100%">
       <Box
         bg="surface"
@@ -1101,6 +1091,10 @@ function CarSelector({
   );
 }
 
+// Oyning har bir "bo'sh" (xarajatsiz) kuni uchun to'g'ridan-to'g'ri jadval
+// qatorida kiritish formasi. Sana shu kunga qattiq bog'langan (o'zgartirib
+// bo'lmaydi), spidometr boshi backend tomonidan hisoblab beriladi — foydalanuvchi
+// faqat yoqilg'i turi, olingan miqdor va yurgan km ni kiritadi.
 function DayEntryRow({
   row,
   idx,
@@ -1203,25 +1197,13 @@ function DayEntryRow({
         />
       </Td>
       <Td isNumeric borderColor="border">
-        <EstimatedCell
-          value={estimatedFuelConsumed}
-          unit={selectedUnit}
-          tooltip="Sarf normasi orqali taxminiy hisoblanadi"
-        />
+        <EstimatedCell value={estimatedFuelConsumed} unit={selectedUnit} />
       </Td>
       <Td isNumeric borderColor="border">
-        <AutoCell
-          value={odometerStart}
-          unit="km"
-          tooltip="Avtomatik: shu kunning boshlang'ich spidometri"
-        />
+        <AutoCell value={odometerStart} unit="km" />
       </Td>
       <Td isNumeric borderColor="border">
-        <AutoCell
-          value={computedOdometerEnd}
-          unit="km"
-          tooltip="Avtomatik: spidometr boshi + yurgan km"
-        />
+        <AutoCell value={computedOdometerEnd} unit="km" />
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
@@ -1236,11 +1218,7 @@ function DayEntryRow({
         <EstimatedCell value={estimatedSum} unit="so'm" />
       </Td>
       <Td isNumeric borderColor="border">
-        <EstimatedCell
-          value={computedBalanceAfter}
-          unit={selectedUnit}
-          tooltip="Avtomatik: oldingi qoldiq + olingan - sarflangan"
-        />
+        <EstimatedCell value={computedBalanceAfter} unit={selectedUnit} />
       </Td>
       <Td borderColor="border">
         <HStack spacing={2}>
@@ -1346,25 +1324,13 @@ function EditRowInline({
         />
       </Td>
       <Td isNumeric borderColor="border">
-        <EstimatedCell
-          value={estimatedFuelConsumed}
-          unit={selectedUnit}
-          tooltip="Sarf normasi orqali taxminiy hisoblanadi"
-        />
+        <EstimatedCell value={estimatedFuelConsumed} unit={selectedUnit} />
       </Td>
       <Td isNumeric borderColor="border">
-        <AutoCell
-          value={editForm.odometer_start}
-          unit="km"
-          tooltip="Avtomatik — bu yozuvning boshlang'ich spidometri"
-        />
+        <AutoCell value={editForm.odometer_start} unit="km" />
       </Td>
       <Td isNumeric borderColor="border">
-        <AutoCell
-          value={computedOdometerEnd}
-          unit="km"
-          tooltip="Avtomatik: spidometr boshi + yurgan km"
-        />
+        <AutoCell value={computedOdometerEnd} unit="km" />
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
@@ -1375,11 +1341,7 @@ function EditRowInline({
         />
       </Td>
       <Td isNumeric borderColor="border">
-        <EstimatedCell
-          value={estimatedSum}
-          unit="so'm"
-          tooltip="Saqlagach qayta hisoblanadi"
-        />
+        <EstimatedCell value={estimatedSum} unit="so'm" />
       </Td>
       <Td isNumeric borderColor="border">
         <EstimatedCell value={computedBalanceAfter} unit={selectedUnit} />
@@ -1462,21 +1424,7 @@ function DataRow({
         ? Number(row.received_amount) * effectivePrice
         : null;
 
-  const sumIsComputedLocally = sum === null && displaySum !== null;
-
   const showActions = editingId === null;
-
-  const dateTooltipParts = [];
-  if (responsibleEmployee?.full_name) {
-    dateTooltipParts.push(`Mas'ul: ${responsibleEmployee.full_name}`);
-  }
-  if (driver?.full_name) {
-    dateTooltipParts.push(`Haydovchi: ${driver.full_name}`);
-  }
-  if (normAtTime !== null && normAtTime !== undefined) {
-    dateTooltipParts.push(`Norma: ${formatNumber(normAtTime)} / 100 km`);
-  }
-  const dateTooltip = dateTooltipParts.join(" • ");
 
   return (
     <Tr
@@ -1485,20 +1433,7 @@ function DataRow({
       transition="background 0.15s ease"
     >
       <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
-        {dateTooltip ? (
-          <Tooltip label={dateTooltip} placement="top" hasArrow openDelay={300}>
-            <Text
-              as="span"
-              cursor="default"
-              borderBottom="1px dashed"
-              borderColor="border"
-            >
-              {formatDate(row.date)}
-            </Text>
-          </Tooltip>
-        ) : (
-          formatDate(row.date)
-        )}
+        {formatDate(row.date)}
       </Td>
       <Td borderColor="border">
         <FuelBadge
@@ -1511,15 +1446,7 @@ function DataRow({
         {formatNumber(row.received_amount)} {fuelUnit}
       </Td>
       <Td isNumeric color="textSecondary" borderColor="border">
-        <AutoCell
-          value={fuelConsumed}
-          unit={fuelUnit}
-          tooltip={
-            normAtTime !== null && normAtTime !== undefined
-              ? `Backend hisoblagan (norma: ${formatNumber(normAtTime)} / 100 km)`
-              : "Backend hisoblagan"
-          }
-        />
+        <AutoCell value={fuelConsumed} unit={fuelUnit} />
       </Td>
       <Td isNumeric color="textSecondary" borderColor="border">
         {formatNumber(row.odometer_start)} km
@@ -1535,24 +1462,10 @@ function DataRow({
             : "—"}
       </Td>
       <Td isNumeric fontWeight="bold" color="text" borderColor="border">
-        <AutoCell
-          value={displaySum}
-          unit="so'm"
-          tooltip={
-            sumIsComputedLocally
-              ? `Olingan yoqilg'i x o'sha paytdagi narx (${
-                  effectivePrice !== null ? formatNumber(effectivePrice) : "—"
-                } so'm) asosida hisoblangan`
-              : "Backend hisoblagan"
-          }
-        />
+        <AutoCell value={displaySum} unit="so'm" />
       </Td>
       <Td isNumeric color="textSecondary" borderColor="border">
-        <AutoCell
-          value={balanceAfter}
-          unit={fuelUnit}
-          tooltip="Backend hisoblagan"
-        />
+        <AutoCell value={balanceAfter} unit={fuelUnit} />
       </Td>
       <Td borderColor="border">
         <HolidayBadge isHoliday={row.is_holiday} />
@@ -1627,7 +1540,7 @@ function TotalsSummaryTable({ totals }) {
           Jami statistika
         </Text>
       </Box>
-      <TableContainer w="100%">
+      <TableContainer w="100%" overflowX="visible">
         <Table variant="simple" size="sm" w="100%">
           <Thead bg="bg">
             <Tr>
@@ -1825,37 +1738,37 @@ function ExpenseTable({
   const header = (
     <Thead bg="bg" position="sticky" top={0} zIndex={1}>
       <Tr>
-        <Th color="textSecondary" borderColor="border" py={4} minW="110px">
+        <Th color="textSecondary" borderColor="border" py={4}>
           Sana
         </Th>
-        <Th color="textSecondary" borderColor="border" minW="110px">
+        <Th color="textSecondary" borderColor="border">
           Yoqilg'i
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="110px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Olingan
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="110px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Sarflangan
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Spidometr (boshi)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Spidometr (oxiri)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="100px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Yurgan (km)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="120px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Summa (so'm)
         </Th>
-        <Th color="textSecondary" borderColor="border" isNumeric minW="110px">
+        <Th color="textSecondary" borderColor="border" isNumeric>
           Qoldiq
         </Th>
-        <Th color="textSecondary" borderColor="border" minW="100px">
+        <Th color="textSecondary" borderColor="border">
           Holat
         </Th>
-        <Th borderColor="border" w="1%" minW="80px">
+        <Th borderColor="border" w="1%">
           Amallar
         </Th>
       </Tr>
@@ -1913,8 +1826,8 @@ function ExpenseTable({
   };
 
   return (
-    <TableContainer w="100%">
-      <Table variant="simple" size="sm" w="100%">
+    <TableContainer w="100%" overflowX="visible">
+      <Table variant="simple" size="sm" w="100%" sx={{ tableLayout: "auto" }}>
         {header}
         <Tbody>
           {loading &&
@@ -2075,26 +1988,17 @@ function CostPage() {
     saveCarIdToStorage(selectedCarId);
   }, [selectedCarId]);
 
-  // Scroll holatini saqlash va tiklash
-  useEffect(() => {
-    const savedScroll = localStorage.getItem(SCROLL_KEY);
-    if (savedScroll) {
-      window.scrollTo(0, Number(savedScroll));
-    }
-
-    const handleScroll = () => {
-      localStorage.setItem(SCROLL_KEY, String(window.scrollY));
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   const [filters, setFilters] = useState(() => {
     const stored = loadFiltersFromStorage();
     return stored ? { ...DEFAULT_FILTERS, ...stored } : DEFAULT_FILTERS;
   });
-  const [expenses, setExpenses] = useState([]);
-  const [totals, setTotals] = useState([]);
+
+  // Xom ma'lumot: backenddan kelgan "days" massivi, hech qanday hisob-kitobsiz.
+  // Qatorlarni tayyorlash (buildMonthDayRows/sort) va statistikani hisoblash
+  // (totals) endi bu state'dan kelib chiqib FAQAT frontendda (useMemo bilan)
+  // amalga oshiriladi — shu tufayli fuelTypes/fuelTypesById o'zgarishi
+  // backendga takroriy so'rov yuborishga OLIB KELMAYDI.
+  const [rawDays, setRawDays] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fuelTypes, setFuelTypes] = useState([]);
   const [fuelTypesLoading, setFuelTypesLoading] = useState(true);
@@ -2148,15 +2052,20 @@ function CostPage() {
 
   const handleCarChange = (id) => {
     setSelectedCarId(id);
-    setExpenses([]);
-    setTotals([]);
+    setRawDays([]);
     setEditingId(null);
   };
 
+  // MUHIM TUZATISH: bu funksiya endi faqat [selectedCarId, filters.year,
+  // filters.month, filters.fuel_id] ga bog'liq — butun `filters` obyektiga
+  // yoki `fuelTypesById` ga EMAS. Avval `fuelTypesById` dependency bo'lgani
+  // uchun sahifa ochilganda backendga "car-monthly-report" so'rovi 2 marta
+  // yuborilardi: 1) komponent mount bo'lganda (fuelTypes hali bo'sh),
+  // 2) yoqilg'i turlari yuklanib, fuelTypesById yangilangach. Endi bu
+  // qayta so'rov butunlay yo'qoladi.
   const loadExpenses = useCallback(async () => {
     if (!selectedCarId) {
-      setExpenses([]);
-      setTotals([]);
+      setRawDays([]);
       return;
     }
     setLoading(true);
@@ -2168,37 +2077,54 @@ function CostPage() {
         filters.fuel_id || undefined,
       );
       const days = pick(data, ["days"], []);
-      const rows = buildMonthDayRows(days);
-
-      rows.sort((a, b) => {
-        const da = new Date(a.date).getTime() || 0;
-        const db = new Date(b.date).getTime() || 0;
-        return filters.sortOrder === "DESC" ? db - da : da - db;
-      });
-
-      setExpenses(rows);
-      const totalsRaw = computeTotalsFromExpenses(rows, fuelTypesById);
-      setTotals(totalsRaw.map(normalizeTotal));
+      setRawDays(days);
     } catch (err) {
       toastService.error("Ro'yxatni yuklab bo'lmadi: " + err.message);
-      setExpenses([]);
-      setTotals([]);
+      setRawDays([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedCarId, filters, fuelTypesById]);
+  }, [selectedCarId, filters.year, filters.month, filters.fuel_id]);
 
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses]);
 
-  const [normRatesByFuelId, setNormRatesByFuelId] = useState({});
+  // Qatorlarni tayyorlash va tartiblash — sof frontend hisob-kitob,
+  // hech qanday tarmoq so'rovini keltirib chiqarmaydi.
+  const expenses = useMemo(() => {
+    const rows = buildMonthDayRows(rawDays);
+    rows.sort((a, b) => {
+      const da = new Date(a.date).getTime() || 0;
+      const db = new Date(b.date).getTime() || 0;
+      return filters.sortOrder === "DESC" ? db - da : da - db;
+    });
+    return rows;
+  }, [rawDays, filters.sortOrder]);
 
+  // Statistika (jami) — fuelTypesById yuklanib/o'zgarib tursa ham bu yerda
+  // faqat qayta hisoblanadi, backendga qayta murojaat qilinmaydi.
+  const totals = useMemo(() => {
+    const totalsRaw = computeTotalsFromExpenses(expenses, fuelTypesById);
+    return totalsRaw.map(normalizeTotal);
+  }, [expenses, fuelTypesById]);
+
+  const [normRatesByFuelId, setNormRatesByFuelId] = useState({});
+  const [normRatesLoading, setNormRatesLoading] = useState(false);
+
+  // Eslatma: har bir yoqilg'i turi uchun alohida "car-fuel-norms" so'rovi
+  // yuboriladi, chunki joriy backend endpointi (AllNorms) bitta mashina +
+  // bitta yoqilg'i turi kesimida ishlaydi va mashinaga biriktirilgan
+  // normalarni bittalab qaytaradi. Agar backendda "bitta mashina uchun
+  // BARCHA normalar" qaytaradigan alohida endpoint mavjud bo'lsa (masalan,
+  // fuel_id parametrisiz chaqirilganda), bu yerni bitta so'rovga tushirish
+  // mumkin — hozircha xavfsiz tomondan qoldirildi.
   const loadNormRates = useCallback(async () => {
     if (!selectedCarId || fuelTypes.length === 0) {
       setNormRatesByFuelId({});
       return;
     }
+    setNormRatesLoading(true);
     try {
       const entries = await Promise.all(
         fuelTypes.map(async (f) => {
@@ -2230,12 +2156,29 @@ function CostPage() {
       setNormRatesByFuelId(Object.fromEntries(entries));
     } catch (e) {
       setNormRatesByFuelId({});
+    } finally {
+      setNormRatesLoading(false);
     }
   }, [selectedCarId, fuelTypes]);
 
   useEffect(() => {
     loadNormRates();
   }, [loadNormRates]);
+
+  // Faqat shu mashinaga biriktirilgan (norma belgilangan) yoqilg'i turlari.
+  // Agar hali yuklanayotgan bo'lsa yoki mashina uchun birorta ham norma
+  // topilmasa, foydalanuvchi noto'g'ri tanlov qilmasligi uchun barcha
+  // turlarni ko'rsatamiz (fallback).
+  const carFuelTypes = useMemo(() => {
+    if (!selectedCarId) return fuelTypes;
+    const assigned = fuelTypes.filter(
+      (f) =>
+        normRatesByFuelId[f.id] !== null &&
+        normRatesByFuelId[f.id] !== undefined,
+    );
+    if (assigned.length > 0) return assigned;
+    return fuelTypes;
+  }, [fuelTypes, normRatesByFuelId, selectedCarId]);
 
   const [lastBalance, setLastBalance] = useState(null);
 
@@ -2476,6 +2419,7 @@ function CostPage() {
       px={{ base: 3, md: 5, xl: 6 }}
       py={{ base: 4, md: 8 }}
     >
+      {/* Sarlavha */}
       <Box mb={6}>
         <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
           <Box>
@@ -2491,22 +2435,16 @@ function CostPage() {
               Mashinaning kunlik yoqilg'i xarajatlari va sarf statistikasi
             </Text>
           </Box>
-          <Tooltip
-            label={showCards ? "Ro'yxat ko'rinishi" : "Kartochka ko'rinishi"}
-            hasArrow
-            placement="left"
-          >
-            <IconButton
-              aria-label="Mashinalar ko'rinishini almashtirish"
-              icon={showCards ? <List size={18} /> : <LayoutGrid size={18} />}
-              size="sm"
-              variant={showCards ? "solid" : "outline"}
-              colorScheme={showCards ? "primary" : "gray"}
-              onClick={() => setShowCards((prev) => !prev)}
-              borderRadius="md"
-              borderColor="border"
-            />
-          </Tooltip>
+          <IconButton
+            aria-label="Mashinalar ko'rinishini almashtirish"
+            icon={showCards ? <List size={18} /> : <LayoutGrid size={18} />}
+            size="sm"
+            variant={showCards ? "solid" : "outline"}
+            colorScheme={showCards ? "primary" : "gray"}
+            onClick={() => setShowCards((prev) => !prev)}
+            borderRadius="md"
+            borderColor="border"
+          />
         </Flex>
       </Box>
 
@@ -2538,6 +2476,7 @@ function CostPage() {
         />
       </Box>
 
+      {/* Jadval */}
       <Box
         bg="surface"
         borderRadius="2xl"
@@ -2555,8 +2494,8 @@ function CostPage() {
           noCarSelected={noCarSelected}
           onAddForDate={handleAddForDate}
           savingDate={savingDate}
-          fuelTypes={fuelTypes}
-          fuelTypesLoading={fuelTypesLoading}
+          fuelTypes={carFuelTypes}
+          fuelTypesLoading={fuelTypesLoading || normRatesLoading}
           editingId={editingId}
           editForm={editForm}
           onEditFormChange={updateEditForm}
@@ -2566,9 +2505,12 @@ function CostPage() {
           isSavingEdit={isSavingEdit}
           onDelete={askDelete}
           selectedCarId={selectedCarId}
+          normRatesByFuelId={normRatesByFuelId}
+          lastBalance={lastBalance}
         />
       </Box>
 
+      {/* Jami statistika */}
       {!loading && !noCarSelected && (
         <Box mt={5}>
           <TotalsSummaryTable totals={totals} />
