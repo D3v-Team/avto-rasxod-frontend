@@ -2304,9 +2304,7 @@ function CostPage() {
     setEditForm(EMPTY_EDIT_FORM);
   };
 
-  // Endi fuel_id ham validatsiya qilinadi va Update so'roviga qo'shib
-  // yuboriladi — foydalanuvchi yozuv uchun yoqilg'i turini ham
-  // o'zgartira oladi.
+ 
   const saveEdit = async () => {
     if (!editingId) return;
     if (
