@@ -56,9 +56,7 @@ class apiCost {
     return response.data;
   };
 
-  // 1) Bitta mashina bo'yicha OYLIK HISOBOT — barcha yoqilg'i turlari
-  // "fuel_reports" massivida keladi.
-  // GET /car-daily-expenses/monthly-report/{car_id}?month=YYYY-MM
+
   static MonthlyReport = async (car_id, month) => {
     const response = await $api.get(
       `/car-daily-expenses/car-monthly-report/${car_id}`,
@@ -67,8 +65,6 @@ class apiCost {
     return response.data;
   };
 
-  // 2) Barcha mashinalar bo'yicha OYLIK STATISTIKA (dashboard uchun)
-  // GET /car-daily-expenses/monthly-statistics?month=YYYY-MM&is_active=&car_id=
   static MonthlyStatistics = async (month, { is_active, car_id } = {}) => {
     const params = { month };
     if (is_active !== undefined && is_active !== "")
@@ -81,9 +77,6 @@ class apiCost {
     return response.data;
   };
 
-  // 3) Bitta mashina + bitta yoqilg'i turi bo'yicha KUNLIK HISOBOT
-  // (har bir kun uchun "expenses" massivi keladi)
-  // GET /car-daily-expenses/car-monthly-report?car_id=&month=&fuel_id=
   static CarMonthlyReport = async (car_id, month, fuel_id) => {
     const params = { car_id, month };
     if (fuel_id) params.fuel_id = fuel_id;
@@ -97,7 +90,6 @@ class apiCost {
     const params = { car_id, year, month };
     if (fuel_id) params.fuel_id = fuel_id;
 
-    // responseType: "blob" — fayl (xlsx) qaytganda MAJBURIY
     const response = await $api.get(
       "/car-daily-expenses/car-monthly-report-excel",
       { params, responseType: "blob" },
