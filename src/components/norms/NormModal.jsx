@@ -235,6 +235,8 @@ function HistoryTab({
   onHistoryChange,
   historyEffectiveFrom,
   onHistoryEffectiveFromChange,
+  historyPrice,
+  onHistoryPriceChange,
   onHistory,
   isSubmitting,
 }) {
@@ -285,6 +287,20 @@ function HistoryTab({
                   size="md"
                 />
               </FormControl>
+              <FormControl isRequired>
+                <FormLabel fontSize="xs" fontWeight="600" mb={1.5}>
+                  Yoqilg'i narxi
+                </FormLabel>
+                <Input
+                  type="number"
+                  placeholder="Masalan: 12500"
+                  value={historyPrice}
+                  onChange={(e) => onHistoryPriceChange(e.target.value)}
+                  focusBorderColor={ACCENT}
+                  borderRadius="xl"
+                  size="md"
+                />
+              </FormControl>
             </SimpleGrid>
           </Box>
           <Button
@@ -294,7 +310,7 @@ function HistoryTab({
             _hover={{ bg: "#2563EB" }}
             onClick={onHistory}
             isLoading={isSubmitting}
-            isDisabled={!historyValue || !historyEffectiveFrom}
+            isDisabled={!historyEffectiveFrom}
             w="full"
             size="md"
             borderRadius="xl"
@@ -395,6 +411,8 @@ export default function NormModal({
   onHistoryChange,
   historyEffectiveFrom,
   onHistoryEffectiveFromChange,
+  historyPrice,
+  onHistoryPriceChange,
 }) {
   const activeIndex = TAB_CONFIG.findIndex((tab) => tab.key === activeTab);
 
@@ -507,6 +525,8 @@ export default function NormModal({
                     onHistoryChange={onHistoryChange}
                     historyEffectiveFrom={historyEffectiveFrom}
                     onHistoryEffectiveFromChange={onHistoryEffectiveFromChange}
+                    historyPrice={historyPrice}
+                    onHistoryPriceChange={onHistoryPriceChange}
                     onHistory={onHistory}
                     isSubmitting={isSubmitting}
                   />

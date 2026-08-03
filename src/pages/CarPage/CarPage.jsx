@@ -122,7 +122,7 @@ const initialNormState = {
   car_id: "",
   fuel_id: "",
   norm_per_100km: "",
-  current_balance: "",
+  initial_balance: "",
   effective_from: "",
 };
 
@@ -161,6 +161,7 @@ export default function CarPage() {
   const [normListLoading, setNormListLoading] = useState(false);
   const [historyValue, setHistoryValue] = useState("");
   const [historyEffectiveFrom, setHistoryEffectiveFrom] = useState("");
+  const [historyPrice, setHistoryPrice] = useState("");
   const [deleteReason, setDeleteReason] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -557,12 +558,13 @@ export default function CarPage() {
     setSelectedNormId(null);
     setHistoryValue("");
     setHistoryEffectiveFrom("");
+    setHistoryPrice("");
     setDeleteReason("");
     setNormFormData({
       car_id: "",
       fuel_id: "",
       norm_per_100km: "",
-      current_balance: "",
+      initial_balance: "",
       effective_from: "",
     });
   };
@@ -579,13 +581,14 @@ export default function CarPage() {
       car_id: car.id,
       fuel_id: "",
       norm_per_100km: "",
-      current_balance: "",
+      initial_balance: "",
       effective_from: "",
     });
     setNormModalTab("create");
     setSelectedNormId(null);
     setHistoryValue("");
     setHistoryEffectiveFrom("");
+    setHistoryPrice("");
     setDeleteReason("");
     setNormListLoading(true);
 
@@ -616,7 +619,7 @@ export default function CarPage() {
       car_id: item.car_id || selectedCar?.id || "",
       fuel_id: item.fuel_id || item.fuel?.id || "",
       norm_per_100km: item.norm_per_100km ?? "",
-      current_balance: item.current_balance ?? "",
+      initial_balance: item.initial_balance ?? "",
       effective_from: item.effective_from || "",
     });
   };
@@ -634,7 +637,7 @@ export default function CarPage() {
       car_id: selectedCar.id,
       fuel_id: normFormData.fuel_id,
       norm_per_100km: Number(normFormData.norm_per_100km),
-      current_balance: Number(normFormData.current_balance || 0),
+      initial_balance: Number(normFormData.initial_balance || 0),
       effective_from: normFormData.effective_from || null,
     };
 
@@ -665,7 +668,7 @@ export default function CarPage() {
     const payload = {
       fuel_id: normFormData.fuel_id,
       norm_per_100km: Number(normFormData.norm_per_100km),
-      current_balance: Number(normFormData.current_balance || 0),
+      initial_balance: Number(normFormData.initial_balance || 0),
       effective_from: normFormData.effective_from || null,
     };
 
@@ -686,22 +689,6 @@ export default function CarPage() {
       return;
     }
 
-    if (!historyValue) {
-      toast.error("Yangi norma kiritilishi shart.");
-      return;
-    }
-
-    const parsedNorm = Number(historyValue);
-    if (Number.isNaN(parsedNorm)) {
-      toast.error("Yangi norma raqam bo'lishi kerak.");
-      return;
-    }
-
-    if (parsedNorm <= 0) {
-      toast.error("Yangi norma musbat son bo'lishi kerak.");
-      return;
-    }
-
     if (!historyEffectiveFrom) {
       toast.error("Amal qilish sanasi kiritilishi shart.");
       return;
@@ -715,21 +702,25 @@ export default function CarPage() {
     setIsSubmitting(true);
 
     try {
-      await apiCars.ChangeNorm(selectedNormId, {
-        new_norm_per_100km: parsedNorm,
-        effective_from: historyEffectiveFrom,
-      });
+     const payload = {
+  effective_from: historyEffectiveFrom,
+
+  ...(historyValue.trim() !== "" && {
+    norm_per_100km: Number(historyValue),
+  }),
+
+  ...(historyPrice.trim() !== "" && {
+    price: Number(historyPrice),
+  }),
+};
+
+      await apiCars.ChangeNorm(selectedNormId, payload);
       setHistoryValue("");
       setHistoryEffectiveFrom("");
+      setHistoryPrice("");
       handleCloseNormModal();
       fetchCars(currentPage);
-    } catch (error) {
-      console.error("Norma tarixini o'zgartirishda xatolik:", error);
-      toast.error(
-        error?.response?.data?.message ||
-          "Norma tarixini o'zgartirishda xatolik yuz berdi.",
-      );
-    } finally {
+    }  finally {
       setIsSubmitting(false);
     }
   };
@@ -1125,9 +1116,7 @@ export default function CarPage() {
                         px={2}
                         whiteSpace="nowrap"
                         w="50px"
-                      >
-                       
-                      </Th>
+                      ></Th>
                     </Tr>
                   </Thead>
                   <Tbody>
@@ -1301,9 +1290,9 @@ export default function CarPage() {
                           </HStack>
                         </Td>
 
-
                         <Td borderColor="border" px={3} py={2.5}>
-                          {car.car_fuel_norms && car.car_fuel_norms.length > 0 ? (
+                          {car.car_fuel_norms &&
+                          car.car_fuel_norms.length > 0 ? (
                             <VStack align="start" spacing={1} maxW="100%">
                               {car.car_fuel_norms.map((norm, idx) => {
                                 const fuelName = norm?.fuel?.name || "Yoqilg'i";
@@ -1772,7 +1761,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Mas'ul xodim */}
-              <FormControl isRequired>
+              <FormControl >
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
@@ -1836,7 +1825,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Speedometer */}
-              <FormControl isRequired>
+              <FormControl >
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
@@ -1925,251 +1914,254 @@ export default function CarPage() {
       </Modal>
 
       {/* YO'L VARAQASI MODAL */}
-     <Modal
-  isOpen={isWaybillOpen}
-  onClose={handleCloseWaybillModal}
-  size="lg" // Ma'lumotlar yonma-yon qulay joylashishi uchun "lg" ga o'zgartirildi
-  isCentered
->
-  <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
-  <ModalContent
-    borderRadius="2xl"
-    boxShadow="2xl"
-    bg="surface"
-    overflow="hidden"
-  >
-    <ModalHeader
-      borderBottom="1px solid"
-      borderColor="border"
-      fontSize="md"
-      fontWeight="700"
-      color="text"
-      py={3}
-      px={5}
-    >
-      Yo'l varaqasi
-    </ModalHeader>
-    <ModalCloseButton mt={0.5} color="textSecondary" borderRadius="lg" />
-
-    <ModalBody bg="bg" p={4}>
-      <VStack spacing={3} align="stretch">
-        {/* Avtomatik to'ldiriladigan ma'lumotlar (2 ustunda) */}
-        <Box
-          p={3}
-          borderRadius="xl"
+      <Modal
+        isOpen={isWaybillOpen}
+        onClose={handleCloseWaybillModal}
+        size="lg" // Ma'lumotlar yonma-yon qulay joylashishi uchun "lg" ga o'zgartirildi
+        isCentered
+      >
+        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(5px)" />
+        <ModalContent
+          borderRadius="2xl"
+          boxShadow="2xl"
           bg="surface"
-          border="1px solid"
-          borderColor="border"
+          overflow="hidden"
         >
-          <Text
-            fontSize="xs"
-            fontWeight="600"
-            color="textSecondary"
-            textTransform="uppercase"
-            mb={1.5}
+          <ModalHeader
+            borderBottom="1px solid"
+            borderColor="border"
+            fontSize="md"
+            fontWeight="700"
+            color="text"
+            py={3}
+            px={5}
           >
-            Avtomobil ma'lumotlari
-          </Text>
-          <SimpleGrid columns={2} spacingX={4} spacingY={1}>
-            <Text fontSize="xs" color="text">
-              <b>Nomi:</b> {selectedWaybillCar?.name}
-            </Text>
-            <Text fontSize="xs" color="text">
-              <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
-            </Text>
-            <Text fontSize="xs" color="text">
-              <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
-            </Text>
-            <Text fontSize="xs" color="text">
-              <b>Mas'ul xodim:</b> {selectedWaybillCar?.responsible_name}
-            </Text>
-            <Text fontSize="xs" color="text" gridColumn="span 2">
-              <b>Speedometer:</b> {selectedWaybillCar?.odometer} km
-            </Text>
-          </SimpleGrid>
-        </Box>
+            Yo'l varaqasi
+          </ModalHeader>
+          <ModalCloseButton mt={0.5} color="textSecondary" borderRadius="lg" />
 
-        {/* Inputlar uchun 2 ustunli tarmoq */}
-        <SimpleGrid columns={2} spacing={3}>
-          {/* Yil */}
-          <FormControl isRequired isInvalid={waybillErrors.year}>
-            <FormLabel
-              fontSize="xs"
-              fontWeight="600"
+          <ModalBody bg="bg" p={4}>
+            <VStack spacing={3} align="stretch">
+              {/* Avtomatik to'ldiriladigan ma'lumotlar (2 ustunda) */}
+              <Box
+                p={3}
+                borderRadius="xl"
+                bg="surface"
+                border="1px solid"
+                borderColor="border"
+              >
+                <Text
+                  fontSize="xs"
+                  fontWeight="600"
+                  color="textSecondary"
+                  textTransform="uppercase"
+                  mb={1.5}
+                >
+                  Avtomobil ma'lumotlari
+                </Text>
+                <SimpleGrid columns={2} spacingX={4} spacingY={1}>
+                  <Text fontSize="xs" color="text">
+                    <b>Nomi:</b> {selectedWaybillCar?.name}
+                  </Text>
+                  <Text fontSize="xs" color="text">
+                    <b>Davlat raqami:</b> {selectedWaybillCar?.plate_number}
+                  </Text>
+                  <Text fontSize="xs" color="text">
+                    <b>Haydovchi:</b> {selectedWaybillCar?.driver_name}
+                  </Text>
+                  <Text fontSize="xs" color="text">
+                    <b>Mas'ul xodim:</b> {selectedWaybillCar?.responsible_name}
+                  </Text>
+                  <Text fontSize="xs" color="text" gridColumn="span 2">
+                    <b>Speedometer:</b> {selectedWaybillCar?.odometer} km
+                  </Text>
+                </SimpleGrid>
+              </Box>
+
+              {/* Inputlar uchun 2 ustunli tarmoq */}
+              <SimpleGrid columns={2} spacing={3}>
+                {/* Yil */}
+                <FormControl isRequired isInvalid={waybillErrors.year}>
+                  <FormLabel
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="textSecondary"
+                    textTransform="uppercase"
+                    mb={1}
+                  >
+                    Yil
+                  </FormLabel>
+                  <Input
+                    size="sm"
+                    type="number"
+                    name="year"
+                    bg="surface"
+                    color="text"
+                    borderColor="border"
+                    borderRadius="lg"
+                    focusBorderColor={ACCENT}
+                    value={waybillForm.year}
+                    onChange={handleWaybillChange}
+                  />
+                </FormControl>
+
+                {/* Oy */}
+                <FormControl isRequired isInvalid={waybillErrors.month}>
+                  <FormLabel
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="textSecondary"
+                    textTransform="uppercase"
+                    mb={1}
+                  >
+                    Oy
+                  </FormLabel>
+                  <Select
+                    size="sm"
+                    name="month"
+                    placeholder="Oyni tanlang"
+                    bg="surface"
+                    color="text"
+                    borderColor="border"
+                    borderRadius="lg"
+                    focusBorderColor={ACCENT}
+                    value={waybillForm.month}
+                    onChange={handleWaybillChange}
+                  >
+                    <option value="1">Yanvar</option>
+                    <option value="2">Fevral</option>
+                    <option value="3">Mart</option>
+                    <option value="4">Aprel</option>
+                    <option value="5">May</option>
+                    <option value="6">Iyun</option>
+                    <option value="7">Iyul</option>
+                    <option value="8">Avgust</option>
+                    <option value="9">Sentabr</option>
+                    <option value="10">Oktabr</option>
+                    <option value="11">Noyabr</option>
+                    <option value="12">Dekabr</option>
+                  </Select>
+                </FormControl>
+
+                {/* Yo'l varaqasi raqami */}
+                <FormControl isRequired isInvalid={waybillErrors.number}>
+                  <FormLabel
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="textSecondary"
+                    textTransform="uppercase"
+                    mb={1}
+                  >
+                    Yo'l varaqasi raqami
+                  </FormLabel>
+                  <Input
+                    size="sm"
+                    name="number"
+                    placeholder="Masalan: 00123"
+                    bg="surface"
+                    color="text"
+                    borderColor="border"
+                    borderRadius="lg"
+                    focusBorderColor={ACCENT}
+                    value={waybillForm.number}
+                    onChange={handleWaybillChange}
+                  />
+                </FormControl>
+
+                {/* Berilgan sana */}
+                <FormControl isRequired isInvalid={waybillErrors.issueDate}>
+                  <FormLabel
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="textSecondary"
+                    textTransform="uppercase"
+                    mb={1}
+                  >
+                    Berilgan sana
+                  </FormLabel>
+                  <Input
+                    size="sm"
+                    type="date"
+                    name="issueDate"
+                    bg="surface"
+                    color="text"
+                    borderColor="border"
+                    borderRadius="lg"
+                    focusBorderColor={ACCENT}
+                    value={waybillForm.issueDate}
+                    onChange={handleWaybillChange}
+                  />
+                </FormControl>
+
+                {/* Berilgan vaqt (To'liq 2-ustunni egallashi yoki 1-ustunda turishi mumkin) */}
+                <FormControl
+                  isRequired
+                  isInvalid={waybillErrors.issueTime}
+                  gridColumn="span 2"
+                >
+                  <FormLabel
+                    fontSize="xs"
+                    fontWeight="600"
+                    color="textSecondary"
+                    textTransform="uppercase"
+                    mb={1}
+                  >
+                    Berilgan vaqt
+                  </FormLabel>
+                  <Input
+                    size="sm"
+                    type="time"
+                    name="issueTime"
+                    bg="surface"
+                    color="text"
+                    borderColor="border"
+                    borderRadius="lg"
+                    focusBorderColor={ACCENT}
+                    value={waybillForm.issueTime}
+                    onChange={handleWaybillChange}
+                  />
+                </FormControl>
+              </SimpleGrid>
+            </VStack>
+          </ModalBody>
+
+          <ModalFooter
+            borderTop="1px solid"
+            borderColor="border"
+            bg="surface"
+            py={3}
+            px={5}
+          >
+            <Button
+              variant="ghost"
               color="textSecondary"
-              textTransform="uppercase"
-              mb={1}
-            >
-              Yil
-            </FormLabel>
-            <Input
+              _hover={{ bg: "blackAlpha.50", color: "text" }}
+              mr={3}
+              onClick={handleCloseWaybillModal}
               size="sm"
-              type="number"
-              name="year"
-              bg="surface"
-              color="text"
-              borderColor="border"
-              borderRadius="lg"
-              focusBorderColor={ACCENT}
-              value={waybillForm.year}
-              onChange={handleWaybillChange}
-            />
-          </FormControl>
-
-          {/* Oy */}
-          <FormControl isRequired isInvalid={waybillErrors.month}>
-            <FormLabel
-              fontSize="xs"
-              fontWeight="600"
-              color="textSecondary"
-              textTransform="uppercase"
-              mb={1}
+              borderRadius="xl"
+              isDisabled={isGeneratingWaybill}
             >
-              Oy
-            </FormLabel>
-            <Select
+              Bekor qilish
+            </Button>
+            <Button
+              bg={ACCENT}
+              color="white"
+              _hover={{ bg: "#2563EB" }}
+              onClick={handleGenerateWaybill}
+              isLoading={isGeneratingWaybill}
+              loadingText="Yaratilmoqda..."
+              isDisabled={isGeneratingWaybill}
               size="sm"
-              name="month"
-              placeholder="Oyni tanlang"
-              bg="surface"
-              color="text"
-              borderColor="border"
-              borderRadius="lg"
-              focusBorderColor={ACCENT}
-              value={waybillForm.month}
-              onChange={handleWaybillChange}
+              px={6}
+              borderRadius="xl"
+              boxShadow="sm"
             >
-              <option value="1">Yanvar</option>
-              <option value="2">Fevral</option>
-              <option value="3">Mart</option>
-              <option value="4">Aprel</option>
-              <option value="5">May</option>
-              <option value="6">Iyun</option>
-              <option value="7">Iyul</option>
-              <option value="8">Avgust</option>
-              <option value="9">Sentabr</option>
-              <option value="10">Oktabr</option>
-              <option value="11">Noyabr</option>
-              <option value="12">Dekabr</option>
-            </Select>
-          </FormControl>
-
-          {/* Yo'l varaqasi raqami */}
-          <FormControl isRequired isInvalid={waybillErrors.number}>
-            <FormLabel
-              fontSize="xs"
-              fontWeight="600"
-              color="textSecondary"
-              textTransform="uppercase"
-              mb={1}
-            >
-              Yo'l varaqasi raqami
-            </FormLabel>
-            <Input
-              size="sm"
-              name="number"
-              placeholder="Masalan: 00123"
-              bg="surface"
-              color="text"
-              borderColor="border"
-              borderRadius="lg"
-              focusBorderColor={ACCENT}
-              value={waybillForm.number}
-              onChange={handleWaybillChange}
-            />
-          </FormControl>
-
-          {/* Berilgan sana */}
-          <FormControl isRequired isInvalid={waybillErrors.issueDate}>
-            <FormLabel
-              fontSize="xs"
-              fontWeight="600"
-              color="textSecondary"
-              textTransform="uppercase"
-              mb={1}
-            >
-              Berilgan sana
-            </FormLabel>
-            <Input
-              size="sm"
-              type="date"
-              name="issueDate"
-              bg="surface"
-              color="text"
-              borderColor="border"
-              borderRadius="lg"
-              focusBorderColor={ACCENT}
-              value={waybillForm.issueDate}
-              onChange={handleWaybillChange}
-            />
-          </FormControl>
-
-          {/* Berilgan vaqt (To'liq 2-ustunni egallashi yoki 1-ustunda turishi mumkin) */}
-          <FormControl isRequired isInvalid={waybillErrors.issueTime} gridColumn="span 2">
-            <FormLabel
-              fontSize="xs"
-              fontWeight="600"
-              color="textSecondary"
-              textTransform="uppercase"
-              mb={1}
-            >
-              Berilgan vaqt
-            </FormLabel>
-            <Input
-              size="sm"
-              type="time"
-              name="issueTime"
-              bg="surface"
-              color="text"
-              borderColor="border"
-              borderRadius="lg"
-              focusBorderColor={ACCENT}
-              value={waybillForm.issueTime}
-              onChange={handleWaybillChange}
-            />
-          </FormControl>
-        </SimpleGrid>
-      </VStack>
-    </ModalBody>
-
-    <ModalFooter
-      borderTop="1px solid"
-      borderColor="border"
-      bg="surface"
-      py={3}
-      px={5}
-    >
-      <Button
-        variant="ghost"
-        color="textSecondary"
-        _hover={{ bg: "blackAlpha.50", color: "text" }}
-        mr={3}
-        onClick={handleCloseWaybillModal}
-        size="sm"
-        borderRadius="xl"
-        isDisabled={isGeneratingWaybill}
-      >
-        Bekor qilish
-      </Button>
-      <Button
-        bg={ACCENT}
-        color="white"
-        _hover={{ bg: "#2563EB" }}
-        onClick={handleGenerateWaybill}
-        isLoading={isGeneratingWaybill}
-        loadingText="Yaratilmoqda..."
-        isDisabled={isGeneratingWaybill}
-        size="sm"
-        px={6}
-        borderRadius="xl"
-        boxShadow="sm"
-      >
-        Excel yuklash
-      </Button>
-    </ModalFooter>
-  </ModalContent>
-</Modal>
-
+              Excel yuklash
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       <NormModal
         isOpen={isNormOpen}
@@ -2193,6 +2185,8 @@ export default function CarPage() {
         onHistoryChange={setHistoryValue}
         historyEffectiveFrom={historyEffectiveFrom}
         onHistoryEffectiveFromChange={setHistoryEffectiveFrom}
+        historyPrice={historyPrice}
+        onHistoryPriceChange={setHistoryPrice}
         deleteReason={deleteReason}
         onDeleteReasonChange={setDeleteReason}
       />
