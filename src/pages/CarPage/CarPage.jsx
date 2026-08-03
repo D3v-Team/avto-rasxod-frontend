@@ -461,7 +461,7 @@ export default function CarPage() {
       plate_number: car.plate_number || "",
       responsible_employee_id: car.responsible_employee_id || "",
       driver_id: car.driver_id || "",
-      odometer: car.odometer || "",
+      odometer: "",
       is_electric: Boolean(car.is_electric),
       is_active: car.is_active ?? true,
     });
@@ -519,22 +519,43 @@ export default function CarPage() {
 
     setIsSubmitting(true);
 
-    const payload = {
-      name: formData.name,
-      plate_number: formData.plate_number,
-      responsible_employee_id: formData.responsible_employee_id || null,
-      driver_id: formData.driver_id || null,
-      odometer: Number(formData.odometer) || 0,
-      is_electric: Boolean(formData.is_electric),
-      is_active: Boolean(formData.is_active),
-    };
-
     try {
       if (selectedCarId) {
-        await apiCars.Update(selectedCarId, payload);
+        const carPayload = {
+          name: formData.name,
+          plate_number: formData.plate_number,
+          responsible_employee_id: formData.responsible_employee_id || null,
+          driver_id: formData.driver_id || null,
+          is_electric: Boolean(formData.is_electric),
+          is_active: Boolean(formData.is_active),
+        };
+
+       
+        const promises = [apiCars.Update(selectedCarId, carPayload)];
+
+      
+        if (formData.odometer !== undefined && formData.odometer !== "") {
+          promises.push(
+            apiCars.CorrectInitialSpeedometer(selectedCarId, {
+              new_initial_speedometer: Number(formData.odometer) || 0,
+            }),
+          );
+        }
+
+        await Promise.all(promises);
         setElectricStatus(selectedCarId, formData.is_electric);
       } else {
-        const createRes = await apiCars.Create(payload);
+        const createPayload = {
+          name: formData.name,
+          plate_number: formData.plate_number,
+          responsible_employee_id: formData.responsible_employee_id || null,
+          driver_id: formData.driver_id || null,
+          odometer: Number(formData.odometer) || 0,
+          is_electric: Boolean(formData.is_electric),
+          is_active: Boolean(formData.is_active),
+        };
+
+        const createRes = await apiCars.Create(createPayload);
         const newCarId =
           createRes?.data?.id ??
           createRes?.data?.data?.id ??
@@ -545,8 +566,11 @@ export default function CarPage() {
           setElectricStatus(newCarId, formData.is_electric);
         }
       }
+
       onFormClose();
       fetchCars(currentPage);
+    } catch (error) {
+      console.error("Saqlashda xatolik:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -702,17 +726,17 @@ export default function CarPage() {
     setIsSubmitting(true);
 
     try {
-     const payload = {
-  effective_from: historyEffectiveFrom,
+      const payload = {
+        effective_from: historyEffectiveFrom,
 
-  ...(historyValue.trim() !== "" && {
-    norm_per_100km: Number(historyValue),
-  }),
+        ...(historyValue.trim() !== "" && {
+          norm_per_100km: Number(historyValue),
+        }),
 
-  ...(historyPrice.trim() !== "" && {
-    price: Number(historyPrice),
-  }),
-};
+        ...(historyPrice.trim() !== "" && {
+          price: Number(historyPrice),
+        }),
+      };
 
       await apiCars.ChangeNorm(selectedNormId, payload);
       setHistoryValue("");
@@ -720,7 +744,7 @@ export default function CarPage() {
       setHistoryPrice("");
       handleCloseNormModal();
       fetchCars(currentPage);
-    }  finally {
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -1761,7 +1785,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Mas'ul xodim */}
-              <FormControl >
+              <FormControl>
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
@@ -1825,7 +1849,7 @@ export default function CarPage() {
               </FormControl>
 
               {/* Speedometer */}
-              <FormControl >
+              <FormControl>
                 <FormLabel
                   fontSize="xs"
                   fontWeight="600"
