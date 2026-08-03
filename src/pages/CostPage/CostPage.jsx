@@ -1095,6 +1095,11 @@ function CarSelector({
 
 // Oyning har bir "bo'sh" (xarajatsiz) kuni uchun to'g'ridan-to'g'ri jadval
 // qatorida kiritish formasi.
+// MUHIM: yoqilg'i turi endi avtomatik tanlanmaydi — foydalanuvchi
+// "Yoqilg'ini tanlang" placeholder orqali o'zi tanlashi kerak.
+// Qoldiq (balans) faqat TANLANGAN yoqilg'i turiga tegishli qiymat bilan
+// ko'rsatiladi (lastBalanceByFuelId orqali har bir yoqilg'i turi uchun
+// alohida saqlanadi).
 function DayEntryRow({
   row,
   idx,
@@ -1106,24 +1111,27 @@ function DayEntryRow({
   disabled,
   selectedCarId,
   normRatesByFuelId,
-  lastBalance,
+  lastBalanceByFuelId,
 }) {
   const [fuelId, setFuelId] = useState("");
-  const [receivedAmount, setReceivedAmount] = useState("0");
-  const [distance, setDistance] = useState("0");
+  const [receivedAmount, setReceivedAmount] = useState("");
+  const [distance, setDistance] = useState("");
   const [isHoliday, setIsHoliday] = useState(false);
 
-  useEffect(() => {
-    if (fuelTypes.length && !fuelId) {
-      setFuelId(fuelTypes[0].id);
-    }
-  }, [fuelTypes, fuelId]);
-
   const rowBaseBg = idx % 2 === 1 ? "bg" : "surface";
-  const fuelMeta = fuelTypesById?.[fuelId];
-  const selectedUnit = fuelMeta?.unit || "litr";
+  const fuelMeta = fuelId ? fuelTypesById?.[fuelId] : null;
+  const selectedUnit = fuelId ? fuelMeta?.unit || "litr" : "";
+
+  // Tanlangan yoqilg'i turiga tegishli oxirgi qoldiq. Yoqilg'i hali
+  // tanlanmagan bo'lsa — hech qanday qoldiq ko'rsatilmaydi (null).
+  const lastBalance = fuelId
+    ? lastBalanceByFuelId && lastBalanceByFuelId[fuelId] !== undefined
+      ? lastBalanceByFuelId[fuelId]
+      : null
+    : null;
+
   const estimatedSum =
-    fuelMeta?.price && receivedAmount !== ""
+    fuelId && fuelMeta?.price && receivedAmount !== ""
       ? Number(receivedAmount) * Number(fuelMeta.price)
       : null;
   const hasDistance = distance !== "";
@@ -1136,7 +1144,7 @@ function DayEntryRow({
       ? Number(odometerStart) + Number(distance)
       : null;
   const normRate =
-    normRatesByFuelId && normRatesByFuelId[fuelId] !== undefined
+    fuelId && normRatesByFuelId && normRatesByFuelId[fuelId] !== undefined
       ? normRatesByFuelId[fuelId]
       : null;
   const estimatedFuelConsumed =
@@ -1144,7 +1152,7 @@ function DayEntryRow({
       ? (Number(distance) * normRate) / 100
       : null;
   const computedBalanceAfter =
-    lastBalance !== null && receivedAmount !== "" && hasDistance
+    fuelId && lastBalance !== null && receivedAmount !== "" && hasDistance
       ? Number(lastBalance) +
         Number(receivedAmount) -
         (estimatedFuelConsumed || 0)
@@ -1153,6 +1161,7 @@ function DayEntryRow({
   const isValid = !disabled && !!fuelId && odometerStart !== "";
 
   const handleAdd = () => {
+    if (!fuelId) return;
     onAdd(row.date, {
       fuel_id: fuelId,
       odometer_start: odometerStart,
@@ -1176,9 +1185,9 @@ function DayEntryRow({
             value={fuelId}
             onChange={(e) => setFuelId(e.target.value)}
             isDisabled={disabled || isSaving}
+            placeholder="Yoqilg'ini tanlang"
             {...inputStyles}
           >
-            {fuelTypes.length === 0 && <option value="">—</option>}
             {fuelTypes.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.label}
@@ -1191,7 +1200,7 @@ function DayEntryRow({
         <UnitNumberInput
           value={receivedAmount}
           onChange={(val) => setReceivedAmount(val)}
-          isDisabled={disabled || isSaving}
+          isDisabled={disabled || isSaving || !fuelId}
           unit={selectedUnit}
           size="sm"
         />
@@ -1209,7 +1218,7 @@ function DayEntryRow({
         <UnitNumberInput
           value={distance}
           onChange={(val) => setDistance(val)}
-          isDisabled={disabled || isSaving}
+          isDisabled={disabled || isSaving || !fuelId}
           unit="km"
           size="sm"
         />
@@ -1250,8 +1259,9 @@ function DayEntryRow({
   );
 }
 
-// Mavjud yozuvni tahrirlash qatori. Endi yoqilg'i turi ham Select orqali
-// o'zgartiriladi (avval faqat statik Badge sifatida ko'rsatilardi).
+// Mavjud yozuvni tahrirlash qatori. Yoqilg'i turi Select orqali
+// o'zgartiriladi va qoldiq shu tanlangan yoqilg'i turiga mos ravishda
+// hisoblanadi (lastBalanceByFuelId orqali).
 function EditRowInline({
   editForm,
   onChange,
@@ -1263,7 +1273,7 @@ function EditRowInline({
   fuelTypesLoading,
   selectedCarId,
   normRatesByFuelId,
-  lastBalance,
+  lastBalanceByFuelId,
 }) {
   const rowBg = useColorModeValue("accent.50", "whiteAlpha.150");
   const rowBorder = useColorModeValue("accent.100", "whiteAlpha.300");
@@ -1277,22 +1287,35 @@ function EditRowInline({
     editForm.odometer_start !== "" &&
     hasDistance &&
     editForm.received_amount !== "";
-  const fuelMeta = fuelTypesById[editForm.fuel_id];
-  const selectedUnit = fuelMeta?.unit || "litr";
+  const fuelMeta = editForm.fuel_id ? fuelTypesById[editForm.fuel_id] : null;
+  const selectedUnit = editForm.fuel_id ? fuelMeta?.unit || "litr" : "";
   const estimatedSum =
-    fuelMeta?.price && editForm.received_amount !== ""
+    editForm.fuel_id && fuelMeta?.price && editForm.received_amount !== ""
       ? Number(editForm.received_amount) * Number(fuelMeta.price)
       : null;
   const normRate =
-    normRatesByFuelId && normRatesByFuelId[editForm.fuel_id] !== undefined
+    editForm.fuel_id &&
+    normRatesByFuelId &&
+    normRatesByFuelId[editForm.fuel_id] !== undefined
       ? normRatesByFuelId[editForm.fuel_id]
       : null;
   const estimatedFuelConsumed =
     normRate !== null && hasDistance
       ? (Number(editForm.distance) * normRate) / 100
       : null;
+
+  // Tanlangan yoqilg'i turiga tegishli oxirgi qoldiq.
+  const lastBalance = editForm.fuel_id
+    ? lastBalanceByFuelId && lastBalanceByFuelId[editForm.fuel_id] !== undefined
+      ? lastBalanceByFuelId[editForm.fuel_id]
+      : null
+    : null;
+
   const computedBalanceAfter =
-    lastBalance !== null && editForm.received_amount !== "" && hasDistance
+    editForm.fuel_id &&
+    lastBalance !== null &&
+    editForm.received_amount !== "" &&
+    hasDistance
       ? Number(lastBalance) +
         Number(editForm.received_amount) -
         (estimatedFuelConsumed || 0)
@@ -1318,9 +1341,9 @@ function EditRowInline({
             value={editForm.fuel_id}
             onChange={(e) => onChange({ fuel_id: e.target.value })}
             isDisabled={isSaving}
+            placeholder="Yoqilg'ini tanlang"
             {...inputStyles}
           >
-            {fuelTypes.length === 0 && <option value="">—</option>}
             {fuelTypes.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.label}
@@ -1333,7 +1356,7 @@ function EditRowInline({
         <UnitNumberInput
           value={editForm.received_amount}
           onChange={(val) => onChange({ received_amount: val })}
-          isDisabled={isSaving}
+          isDisabled={isSaving || !editForm.fuel_id}
           unit={selectedUnit}
           size="sm"
         />
@@ -1351,7 +1374,7 @@ function EditRowInline({
         <UnitNumberInput
           value={editForm.distance}
           onChange={(val) => onChange({ distance: val })}
-          isDisabled={isSaving}
+          isDisabled={isSaving || !editForm.fuel_id}
           unit="km"
           size="sm"
         />
@@ -1746,7 +1769,7 @@ function ExpenseTable({
   onDelete,
   selectedCarId,
   normRatesByFuelId,
-  lastBalance,
+  lastBalanceByFuelId,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1809,7 +1832,7 @@ function ExpenseTable({
           }
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
-          lastBalance={lastBalance}
+          lastBalanceByFuelId={lastBalanceByFuelId}
         />
       );
     }
@@ -1827,7 +1850,7 @@ function ExpenseTable({
           fuelTypesLoading={fuelTypesLoading}
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
-          lastBalance={lastBalance}
+          lastBalanceByFuelId={lastBalanceByFuelId}
         />
       );
     }
@@ -2190,34 +2213,55 @@ function CostPage() {
     return fuelTypes;
   }, [fuelTypes, normRatesByFuelId, selectedCarId]);
 
-  const [lastBalance, setLastBalance] = useState(null);
+  // Har bir yoqilg'i turi uchun ALOHIDA oxirgi qoldiqni saqlaydi:
+  // { [fuel_id]: oxirgi_balans }. Bu orqali select'da tanlangan yoqilg'i
+  // turiga mos qoldiq to'g'ri chiqadi, boshqa turlar aralashib ketmaydi.
+  const [lastBalanceByFuelId, setLastBalanceByFuelId] = useState({});
+  const [lastBalancesLoading, setLastBalancesLoading] = useState(false);
 
-  const loadLastBalance = useCallback(async () => {
-    if (!selectedCarId) {
-      setLastBalance(null);
+  const loadLastBalances = useCallback(async () => {
+    if (!selectedCarId || fuelTypes.length === 0) {
+      setLastBalanceByFuelId({});
       return;
     }
+    setLastBalancesLoading(true);
     try {
-      const response = await apiCost.All(1, 1, {
-        car_id: selectedCarId,
-        sortBy: "date",
-        sortOrder: "DESC",
-      });
-      const list = extractList(response);
-      if (list.length > 0) {
-        const computed = extractComputed(list[0]);
-        setLastBalance(computed.balanceAfter);
-      } else {
-        setLastBalance(0);
-      }
+      const entries = await Promise.all(
+        fuelTypes.map(async (f) => {
+          try {
+            const response = await apiCost.All(1, 1, {
+              car_id: selectedCarId,
+              fuel_id: f.id,
+              sortBy: "date",
+              sortOrder: "DESC",
+            });
+            const list = extractList(response);
+            if (list.length > 0) {
+              const computed = extractComputed(list[0]);
+              return [
+                f.id,
+                computed.balanceAfter !== null
+                  ? Number(computed.balanceAfter)
+                  : 0,
+              ];
+            }
+            return [f.id, 0];
+          } catch (e) {
+            return [f.id, null];
+          }
+        }),
+      );
+      setLastBalanceByFuelId(Object.fromEntries(entries));
     } catch (e) {
-      setLastBalance(null);
+      setLastBalanceByFuelId({});
+    } finally {
+      setLastBalancesLoading(false);
     }
-  }, [selectedCarId]);
+  }, [selectedCarId, fuelTypes]);
 
   useEffect(() => {
-    loadLastBalance();
-  }, [loadLastBalance]);
+    loadLastBalances();
+  }, [loadLastBalances]);
 
   const handleAddForDate = async (date, values) => {
     if (!selectedCarId) {
@@ -2270,6 +2314,7 @@ function CostPage() {
       toastService.success("Yangi xarajat qo'shildi");
       await loadExpenses();
       await loadCars();
+      await loadLastBalances();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2304,7 +2349,6 @@ function CostPage() {
     setEditForm(EMPTY_EDIT_FORM);
   };
 
- 
   const saveEdit = async () => {
     if (!editingId) return;
     if (
@@ -2338,6 +2382,7 @@ function CostPage() {
       cancelEdit();
       await loadExpenses();
       await loadCars();
+      await loadLastBalances();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2363,6 +2408,7 @@ function CostPage() {
       deleteDialog.onClose();
       await loadExpenses();
       await loadCars();
+      await loadLastBalances();
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("O'chirib bo'lmadi: " + err.message);
@@ -2519,7 +2565,7 @@ function CostPage() {
           onDelete={askDelete}
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
-          lastBalance={lastBalance}
+          lastBalanceByFuelId={lastBalanceByFuelId}
         />
       </Box>
 
