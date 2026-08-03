@@ -532,7 +532,7 @@ function Dashboard() {
   const totalColSpan = 4 + fuelColumns.length * 4 + 1;
 
   return (
-    <Box p={{ base: 4, md: 6 }} bg={pageBg} minH="100vh">
+    <Box p={{ base: 4, md: 6 }} bg={"bg"} minH="100vh">
       {/* PAGE HEADER */}
       <Flex
         justify="space-between"

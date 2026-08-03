@@ -63,19 +63,17 @@ class apiCars {
 
     return response;
   };
- static Restore = async (id) => {
-  const response = await $api.patch(
-    `${BASE_URL}/cars/restore/${id}`,
-    {},
-    {
-      showSuccessToast: "Avtomobil muvaffaqiyatli tiklandi",
-    }
-  );
+  static Restore = async (id) => {
+    const response = await $api.patch(
+      `${BASE_URL}/cars/restore/${id}`,
+      {},
+      {
+        showSuccessToast: "Avtomobil muvaffaqiyatli tiklandi",
+      },
+    );
 
-  return response;
-};
-
-
+    return response;
+  };
 
   static AllNorms = async (
     page = 1,
@@ -133,16 +131,17 @@ class apiCars {
     return response;
   };
   static ChangeNorm = async (id, data) => {
-  const response = await $api.patch(
-    `${BASE_URL}/car-fuel-norms/${id}/change-norm`,
-    data,
-    {
-      showSuccessToast: "Yoqilg'i normasi tarixi muvaffaqiyatli o'zgartirildi",
-    }
-  );
+    const response = await $api.patch(
+      `${BASE_URL}/car-fuel-norms/${id}/history`,
+      data,
+      {
+        showSuccessToast:
+          "Yoqilg'i normasi tarixi muvaffaqiyatli o'zgartirildi",
+      },
+    );
 
-  return response;
-};
+    return response;
+  };
 }
 
 export { apiCars };

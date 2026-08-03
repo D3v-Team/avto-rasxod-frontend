@@ -96,8 +96,8 @@ export default function NormFormFields({
           size="md"
           focusBorderColor={accent}
           _hover={{ borderColor: accent }}
-          value={formData.current_balance}
-          onChange={(e) => onChange("current_balance", e.target.value)}
+          value={formData.initial_balance}
+          onChange={(e) => onChange("initial_balance", e.target.value)}
           isDisabled={isDisabled}
         />
       </FormControl>
