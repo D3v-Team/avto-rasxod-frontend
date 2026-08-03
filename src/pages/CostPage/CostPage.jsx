@@ -1323,14 +1323,8 @@ function EditRowInline({
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
-      <Td borderColor="border" py={2}>
-        <Input
-          type="date"
-          size="sm"
-          value={editForm.date}
-          onChange={(e) => onChange({ date: e.target.value })}
-          {...inputStyles}
-        />
+      <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
+        {formatDate(editForm.date)}
       </Td>
       <Td borderColor="border">
         {fuelTypesLoading ? (
