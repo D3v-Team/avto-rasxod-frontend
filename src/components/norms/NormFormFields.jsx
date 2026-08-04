@@ -5,8 +5,6 @@ import {
   Input,
   Select,
   VStack,
-  Box,
-  Text,
 } from "@chakra-ui/react";
 
 export default function NormFormFields({
@@ -15,39 +13,43 @@ export default function NormFormFields({
   fuels = [],
   isDisabled = false,
   accent = "#3B82F6",
+   showFuelField = true,
 }) {
   return (
     <VStack spacing={4} align="stretch">
-      <FormControl isRequired>
-        <FormLabel
-          fontSize="xs"
-          fontWeight="600"
-          color="textSecondary"
-          textTransform="uppercase"
-          letterSpacing="0.5px"
-        >
-          Yoqilg&apos;i turi
-        </FormLabel>
-        <Select
-          placeholder="Yonilg&apos;ini tanlang"
-          bg="surface"
-          color="text"
-          borderColor="border"
-          borderRadius="xl"
-          size="md"
-          focusBorderColor={accent}
-          _hover={{ borderColor: accent }}
-          value={formData.fuel_id}
-          onChange={(e) => onChange("fuel_id", e.target.value)}
-          isDisabled={isDisabled}
-        >
-          {fuels.map((fuel) => (
-            <option key={fuel.id} value={fuel.id}>
-              {fuel.name || fuel.type}
-            </option>
-          ))}
-        </Select>
-      </FormControl>
+      {showFuelField && (
+  <FormControl isRequired>
+    <FormLabel
+      fontSize="xs"
+      fontWeight="600"
+      color="textSecondary"
+      textTransform="uppercase"
+      letterSpacing="0.5px"
+    >
+      Yoqilg&apos;i turi
+    </FormLabel>
+
+    <Select
+      placeholder="Yonilg&apos;ini tanlang"
+      bg="surface"
+      color="text"
+      borderColor="border"
+      borderRadius="xl"
+      size="md"
+      focusBorderColor={accent}
+      _hover={{ borderColor: accent }}
+      value={formData.fuel_id}
+      onChange={(e) => onChange("fuel_id", e.target.value)}
+      isDisabled={isDisabled}
+    >
+      {fuels.map((fuel) => (
+        <option key={fuel.id} value={fuel.id}>
+          {fuel.name || fuel.type}
+        </option>
+      ))}
+    </Select>
+  </FormControl>
+)}
 
       <FormControl isRequired>
         <FormLabel

@@ -178,6 +178,7 @@ function EditTab({
   fuels,
   onEdit,
   isSubmitting,
+  showFuelField = false,
 }) {
   return (
     <SelectorFormLayout
@@ -198,7 +199,7 @@ function EditTab({
               Tanlangan me'yor ko'rsatkichlarini tahrirlang va yangilang.
             </Text>
             <GridFormWrapper>
-              <NormFormFields formData={formData} onChange={onFieldChange} fuels={fuels} accent={ACCENT} />
+              <NormFormFields formData={formData} onChange={onFieldChange} fuels={fuels} accent={ACCENT} showFuelField={showFuelField} />
             </GridFormWrapper>
           </Box>
           <Button

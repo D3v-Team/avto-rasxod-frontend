@@ -111,7 +111,7 @@ export default function Login() {
         position="relative"
       >
         <Image
-          src="/public/img/login.png"
+          src="/img/login.png"
           alt="Login Banner"
           w="100%"
           h="100%"
