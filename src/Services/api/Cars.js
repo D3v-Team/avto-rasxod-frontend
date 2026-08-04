@@ -40,6 +40,15 @@ class apiCars {
     return response;
   };
 
+  static CorrectInitialSpeedometer = async (id, data) => {
+    const response = await $api.patch(
+      `${BASE_URL}/cars/${id}/correct-initial-speedometer`,
+      data,
+    );
+
+    return response;
+  };
+
   static Create = async (data) => {
     const response = await $api.post(`${BASE_URL}/cars`, data, {
       showSuccessToast: "Avtomobil muvaffaqiyatli yaratildi",
