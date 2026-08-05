@@ -194,7 +194,14 @@ export const generateWaybill = async (selectedCar, formData) => {
         `Йўл варақаси берилган вақт: ${issueLine}`,
       );
     }
-
+    worksheet.pageSetup = {
+  ...worksheet.pageSetup,
+  paperSize: 9, // A4
+  orientation: "portrait",
+  fitToPage: true,
+  fitToWidth: 1,
+  fitToHeight: 1,
+};
     const workbookBuffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([workbookBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

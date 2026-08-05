@@ -130,7 +130,7 @@ export default function Login() {
         >
           <Box color="white">
             <Heading size="xl" mb={3} fontWeight="bold">
-              Avto Rasxod Tizimi
+              Avto Xarajat Tizimi
             </Heading>
             <Text fontSize="lg" opacity={0.85}>
               Barcha xarajatlar va hisobotlarni qulay boshqaring
