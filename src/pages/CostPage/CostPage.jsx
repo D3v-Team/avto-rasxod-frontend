@@ -1138,6 +1138,7 @@ function DayEntryRow({
   selectedCarId,
   normRatesByFuelId,
   balancesByFuelId,
+  initialBalancesByFuelId, // new prop
 }) {
   const [fuelId, setFuelId] = useState("");
   const [receivedAmount, setReceivedAmount] = useState("");
@@ -1149,12 +1150,30 @@ function DayEntryRow({
   const selectedUnit = fuelId ? fuelMeta?.unit || "litr" : "";
 
   // Tanlangan yoqilg'i turiga tegishli, SHU KUNGACHA bo'lgan qoldiq.
-  // Yoqilg'i hali tanlanmagan bo'lsa — hech qanday qoldiq ko'rsatilmaydi.
-  const lastBalance = fuelId
-    ? balancesByFuelId && balancesByFuelId[fuelId] !== undefined
-      ? balancesByFuelId[fuelId]
-      : null
-    : null;
+  // Avval balancesByFuelId dan olamiz (bu oy ichidagi oldingi yozuvlar asosida),
+  // agar u null yoki 0 bo'lsa, initialBalancesByFuelId dan olamiz (oxirgi umumiy qoldiq).
+  let lastBalance = null;
+  if (fuelId) {
+    const fromRow =
+      balancesByFuelId && balancesByFuelId[fuelId] !== undefined
+        ? balancesByFuelId[fuelId]
+        : null;
+    if (fromRow !== null && fromRow !== 0) {
+      lastBalance = fromRow;
+    } else {
+      // fallback to initial balance (latest overall)
+      const fromInit =
+        initialBalancesByFuelId && initialBalancesByFuelId[fuelId] !== undefined
+          ? initialBalancesByFuelId[fuelId]
+          : null;
+      if (fromInit !== null && fromInit !== 0) {
+        lastBalance = fromInit;
+      } else {
+        // still null? then use 0
+        lastBalance = 0;
+      }
+    }
+  }
 
   const estimatedSum =
     fuelId && fuelMeta?.price && receivedAmount !== ""
@@ -1178,10 +1197,7 @@ function DayEntryRow({
       ? (Number(distance) * normRate) / 100
       : null;
 
-  // Yoqilg'i solinmagan (receivedAmount bo'sh) bo'lsa ham, yurgan km
-  // kiritilgan bo'lsa — qoldiq ko'rinishi kerak. Shu sabab receivedAmount
-  // bo'sh bo'lsa 0 deb olinadi, va shart faqat fuelId + oldingi qoldiq +
-  // km borligiga bog'liq.
+  // receivedAmount bo'sh bo'lsa 0 deb olinadi
   const computedBalanceAfter =
     fuelId && lastBalance !== null && hasDistance
       ? Number(lastBalance) +
@@ -1189,7 +1205,7 @@ function DayEntryRow({
         (estimatedFuelConsumed || 0)
       : null;
 
-  const isValid = !disabled && !!fuelId && odometerStart !== "";
+  const isValid = !disabled && !!fuelId && odometerStart !== "" && hasDistance;
 
   const handleAdd = () => {
     if (!fuelId) return;
@@ -1311,6 +1327,7 @@ function EditRowInline({
   selectedCarId,
   normRatesByFuelId,
   balancesByFuelId,
+  initialBalancesByFuelId, // new prop
 }) {
   const rowBg = useColorModeValue("accent.50", "whiteAlpha.150");
   const rowBorder = useColorModeValue("accent.100", "whiteAlpha.300");
@@ -1340,14 +1357,28 @@ function EditRowInline({
 
   // Tanlangan yoqilg'i turiga tegishli, ushbu yozuvning sanasigacha (undan
   // oldingi) bo'lgan qoldiq.
-  const lastBalance = editForm.fuel_id
-    ? balancesByFuelId && balancesByFuelId[editForm.fuel_id] !== undefined
-      ? balancesByFuelId[editForm.fuel_id]
-      : null
-    : null;
+  let lastBalance = null;
+  if (editForm.fuel_id) {
+    const fromRow =
+      balancesByFuelId && balancesByFuelId[editForm.fuel_id] !== undefined
+        ? balancesByFuelId[editForm.fuel_id]
+        : null;
+    if (fromRow !== null && fromRow !== 0) {
+      lastBalance = fromRow;
+    } else {
+      const fromInit =
+        initialBalancesByFuelId &&
+        initialBalancesByFuelId[editForm.fuel_id] !== undefined
+          ? initialBalancesByFuelId[editForm.fuel_id]
+          : null;
+      if (fromInit !== null && fromInit !== 0) {
+        lastBalance = fromInit;
+      } else {
+        lastBalance = 0;
+      }
+    }
+  }
 
-  // received_amount bo'sh bo'lsa (yoqilg'i quyilmagan), 0 deb hisoblanadi —
-  // shunda faqat km kiritilganda ham qoldiq ko'rinadi.
   const computedBalanceAfter =
     editForm.fuel_id && lastBalance !== null && hasDistance
       ? Number(lastBalance) +
@@ -1800,6 +1831,7 @@ function ExpenseTable({
   selectedCarId,
   normRatesByFuelId,
   balanceBeforeByRow,
+  initialBalancesByFuelId, // new prop
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1867,6 +1899,7 @@ function ExpenseTable({
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           balancesByFuelId={rowBalances}
+          initialBalancesByFuelId={initialBalancesByFuelId}
         />
       );
     }
@@ -1885,6 +1918,7 @@ function ExpenseTable({
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           balancesByFuelId={rowBalances}
+          initialBalancesByFuelId={initialBalancesByFuelId}
         />
       );
     }
@@ -2041,9 +2075,6 @@ function CostPage() {
   );
   const [showCards, setShowCards] = useState(false);
 
-  // silent = true bo'lsa, orqa fonda yangilanadi va carsLoading holatini
-  // o'zgartirmaydi — shu orqali xarajat qo'shilgach butun blok qayta
-  // "skeleton" holatiga o'tib, "refresh" bo'lgandek ko'rinish bermaydi.
   const loadCars = useCallback(async (opts = {}) => {
     const { silent = false } = opts;
     if (!silent) setCarsLoading(true);
@@ -2155,10 +2186,6 @@ function CostPage() {
     setEditingId(null);
   };
 
-  // MUHIM: mashinalar ro'yxati hali tasdiqlanmagan bo'lsa (carsLoading),
-  // hech qanday so'rov yubormaymiz. Aks holda localStorage'dagi eski
-  // (endi mavjud bo'lmagan) car_id bilan so'rov ketib, 404 xato toast
-  // chiqib ketishi mumkin edi.
   const loadExpenses = useCallback(
     async (opts = {}) => {
       const { silent = false } = opts;
@@ -2266,6 +2293,61 @@ function CostPage() {
     if (assigned.length > 0) return assigned;
     return fuelTypes;
   }, [fuelTypes, normRatesByFuelId, selectedCarId]);
+
+  // Initial balances (latest overall) for each fuel
+  const [initialBalancesByFuelId, setInitialBalancesByFuelId] = useState({});
+  const [initialBalancesLoading, setInitialBalancesLoading] = useState(false);
+
+  const loadInitialBalances = useCallback(
+    async (opts = {}) => {
+      const { silent = false } = opts;
+      if (!selectedCarId || carsLoading || fuelTypes.length === 0) {
+        setInitialBalancesByFuelId({});
+        return;
+      }
+      if (!silent) setInitialBalancesLoading(true);
+      try {
+        const today = getTodayDate();
+        const entries = await Promise.all(
+          fuelTypes.map(async (f) => {
+            try {
+              const response = await apiCost.All(1, 1, {
+                car_id: selectedCarId,
+                fuel_id: f.id,
+                date_to: today,
+                sortBy: "date",
+                sortOrder: "DESC",
+              });
+              const list = extractList(response);
+              if (list.length > 0) {
+                const computed = extractComputed(list[0]);
+                return [
+                  f.id,
+                  computed.balanceAfter !== null
+                    ? Number(computed.balanceAfter)
+                    : 0,
+                ];
+              }
+              return [f.id, 0];
+            } catch (e) {
+              if (isNotFoundError(e)) return [f.id, 0];
+              return [f.id, null];
+            }
+          }),
+        );
+        setInitialBalancesByFuelId(Object.fromEntries(entries));
+      } catch (e) {
+        setInitialBalancesByFuelId({});
+      } finally {
+        if (!silent) setInitialBalancesLoading(false);
+      }
+    },
+    [selectedCarId, fuelTypes, carsLoading],
+  );
+
+  useEffect(() => {
+    loadInitialBalances();
+  }, [loadInitialBalances]);
 
   // Tanlangan OYDAN OLDINGI (bazaviy) qoldiq — har bir yoqilg'i turi
   // uchun alohida. Bu faqat oy ichidagi birinchi yozuv uchun "urug'"
@@ -2417,6 +2499,7 @@ function CostPage() {
       await loadExpenses({ silent: true });
       await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
+      await loadInitialBalances({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2487,6 +2570,7 @@ function CostPage() {
       await loadExpenses({ silent: true });
       await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
+      await loadInitialBalances({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2513,6 +2597,7 @@ function CostPage() {
       await loadExpenses({ silent: true });
       await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
+      await loadInitialBalances({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("O'chirib bo'lmadi: " + err.message);
@@ -2658,7 +2743,9 @@ function CostPage() {
           onAddForDate={handleAddForDate}
           savingDate={savingDate}
           fuelTypes={carFuelTypes}
-          fuelTypesLoading={fuelTypesLoading || normRatesLoading}
+          fuelTypesLoading={
+            fuelTypesLoading || normRatesLoading || initialBalancesLoading
+          }
           editingId={editingId}
           editForm={editForm}
           onEditFormChange={updateEditForm}
@@ -2670,6 +2757,7 @@ function CostPage() {
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           balanceBeforeByRow={balanceBeforeByRow}
+          initialBalancesByFuelId={initialBalancesByFuelId}
         />
       </Box>
 
