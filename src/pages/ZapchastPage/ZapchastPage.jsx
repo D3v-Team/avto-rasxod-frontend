@@ -57,14 +57,18 @@ import { apiZapchast } from "../../Services/api/apiZapchast";
 
 const ACCENT = "#3B82F6";
 const ITEMS_PER_PAGE = 10;
-const PAYMENT_TYPES = ["Naqd", "Karta", "Nasiya"];
+const PAYMENT_TYPES = ["Karta", "Prechisleniye"];
+
+// localStorage kalitlari (Yil/Oy filtrini eslab qolish uchun)
+const LS_YEAR_KEY = "zapchast_filterYear";
+const LS_MONTH_KEY = "zapchast_filterMonth";
 
 const emptyForm = {
   car_id: "",
   part_name: "",
   unit: "",
   quantity: 0,
-  payment_type: "Naqd",
+  payment_type: "Karta",
   price: 0,
   total_price: 0,
   note: "",
@@ -72,9 +76,8 @@ const emptyForm = {
 };
 
 const paymentBadgeStyle = {
-  Naqd: { bg: "green.50", color: "green.600", border: "green.200" },
   Karta: { bg: "blue.50", color: "blue.600", border: "blue.200" },
-  Nasiya: { bg: "purple.50", color: "purple.600", border: "purple.200" },
+  Prechisleniye: { bg: "purple.50", color: "purple.600", border: "purple.200" },
 };
 
 const formatSum = (n) => Number(n || 0).toLocaleString("uz-UZ");
@@ -94,6 +97,27 @@ const MONTH_NAMES = [
   "Dekabr",
 ];
 
+// Joriy yil/oyni default qilib olish, agar avval saqlangan qiymat bo'lsa o'shani ishlatish
+function getDefaultYear() {
+  try {
+    const saved = localStorage.getItem(LS_YEAR_KEY);
+    if (saved) return saved;
+  } catch (e) {
+    // localStorage mavjud bo'lmasa (SSR va h.k.) e'tiborsiz qoldiramiz
+  }
+  return String(new Date().getFullYear());
+}
+
+function getDefaultMonth() {
+  try {
+    const saved = localStorage.getItem(LS_MONTH_KEY);
+    if (saved) return saved;
+  } catch (e) {
+    // localStorage mavjud bo'lmasa (SSR va h.k.) e'tiborsiz qoldiramiz
+  }
+  return String(new Date().getMonth() + 1);
+}
+
 export default function ZapchastPage() {
   const [parts, setParts] = useState([]);
   const [cars, setCars] = useState([]);
@@ -107,8 +131,10 @@ export default function ZapchastPage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [filterYear, setFilterYear] = useState("");
-  const [filterMonth, setFilterMonth] = useState("");
+
+  // Yil va Oy uchun default qiymat: localStorage'da saqlangan bo'lsa o'sha, bo'lmasa joriy yil/oy
+  const [filterYear, setFilterYear] = useState(getDefaultYear);
+  const [filterMonth, setFilterMonth] = useState(getDefaultMonth);
 
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -175,6 +201,7 @@ export default function ZapchastPage() {
       setDateTo("");
     }
     setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterYear, filterMonth]);
 
   const fetchExpenses = async (
@@ -216,7 +243,7 @@ export default function ZapchastPage() {
         part_name: item.part_name || "Nomsiz qism",
         unit: item.unit || "",
         quantity: item.quantity ?? 0,
-        payment_type: item.payment_type || "Naqd",
+        payment_type: item.payment_type || "Karta",
         price: item.price ?? 0,
         total_price: item.total_price ?? 0,
         note: item.note || "",
@@ -274,18 +301,44 @@ export default function ZapchastPage() {
     setCurrentPage(1);
   };
 
+  // Yil tanlanganda state va localStorage'ni birga yangilaymiz
   const handleYearChange = (value) => {
     setFilterYear(value);
+    try {
+      if (value) {
+        localStorage.setItem(LS_YEAR_KEY, value);
+      } else {
+        localStorage.removeItem(LS_YEAR_KEY);
+      }
+    } catch (e) {
+      // localStorage yozib bo'lmasa jim o'tkazamiz, funksionallikka ta'sir qilmasin
+    }
   };
 
+  // Oy tanlanganda state va localStorage'ni birga yangilaymiz
   const handleMonthChange = (value) => {
     setFilterMonth(value);
+    try {
+      if (value) {
+        localStorage.setItem(LS_MONTH_KEY, value);
+      } else {
+        localStorage.removeItem(LS_MONTH_KEY);
+      }
+    } catch (e) {
+      // localStorage yozib bo'lmasa jim o'tkazamiz
+    }
   };
 
   const clearFilter = () => {
     setFilterYear("");
     setFilterMonth("");
     setCurrentPage(1);
+    try {
+      localStorage.removeItem(LS_YEAR_KEY);
+      localStorage.removeItem(LS_MONTH_KEY);
+    } catch (e) {
+      // localStorage yozib bo'lmasa jim o'tkazamiz
+    }
   };
 
   useEffect(() => {
@@ -376,7 +429,7 @@ export default function ZapchastPage() {
       part_name: part.part_name,
       unit: part.unit,
       quantity: part.quantity,
-      payment_type: part.payment_type || "Naqd",
+      payment_type: part.payment_type || "Karta",
       price: part.price,
       total_price: part.total_price,
       note: part.note,
@@ -840,7 +893,7 @@ export default function ZapchastPage() {
                     {parts.map((part) => {
                       const badgeStyle =
                         paymentBadgeStyle[part.payment_type] ||
-                        paymentBadgeStyle.Naqd;
+                        paymentBadgeStyle.Karta;
                       return (
                         <Tr
                           key={part.id}
