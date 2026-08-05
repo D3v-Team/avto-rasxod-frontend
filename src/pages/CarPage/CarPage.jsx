@@ -661,7 +661,7 @@ export default function CarPage() {
       car_id: selectedCar.id,
       fuel_id: normFormData.fuel_id,
       norm_per_100km: Number(normFormData.norm_per_100km),
-      initial_balance: Number(normFormData.initial_balance || 0),
+      current_balance: Number(normFormData.initial_balance || 0),
       effective_from: normFormData.effective_from || null,
     };
 
