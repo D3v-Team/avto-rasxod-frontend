@@ -423,7 +423,7 @@ export default function FuelPage() {
                   _hover={{ borderColor: "primary" }}
                 >
                   <option value="Benzin">Benzin</option>
-                  <option value="Metan">Gaz</option>
+                  <option value="Gaz">Gaz</option>
                   <option value="Propan">Propan</option>
                   
 
