@@ -1152,7 +1152,7 @@ function DayEntryRow({
     odometerStart !== "" && hasDistance
       ? Number(odometerStart) + Number(distance)
       : null;
-const normRate =
+  const normRate =
     fuelId && normRatesByFuelId && normRatesByFuelId[fuelId] !== undefined
       ? normRatesByFuelId[fuelId]
       : null;
@@ -1174,7 +1174,12 @@ const normRate =
           (receivedAmount === "" ? 0 : Number(receivedAmount))
         : null;
 
-  const isValid = !disabled && !!fuelId && odometerStart !== "" && hasDistance;
+  // FIX: "Sarflangan yoqilg'i" va "Yurgan km" to'ldirilmagan bo'lsa ham,
+  // faqat yoqilg'i turi tanlangan (va boshlang'ich spidometr mavjud)
+  // bo'lishi bilanoq "+" (qo'shish) tugmasi bosiladigan bo'ladi.
+  // Avval bu joyda hasDistance ham talab qilinardi, shu sababli masofa
+  // kiritilmaguncha tugma disabled bo'lib qolardi.
+  const isValid = !disabled && !!fuelId && odometerStart !== "";
 
   const handleAdd = () => {
     if (!fuelId) return;
@@ -1296,8 +1301,7 @@ function EditRowInline({
     editForm.odometer_start !== "" && hasDistance
       ? Number(editForm.odometer_start) + Number(editForm.distance)
       : null;
-  const isValid =
-    editForm.fuel_id !== "" && editForm.odometer_start !== "" && hasDistance;
+  const isValid = editForm.fuel_id !== "" && editForm.odometer_start !== "";
   const fuelMeta = editForm.fuel_id ? fuelTypesById[editForm.fuel_id] : null;
   const selectedUnit = editForm.fuel_id ? fuelMeta?.unit || "litr" : "";
   const estimatedSum =
@@ -1307,7 +1311,7 @@ function EditRowInline({
   // Avval yozuvning O'ZIDA saqlangan aniq normani ishlatamiz (norm_at_time) —
   // bu backend haqiqatda ishlatgan qiymat, shuning uchun eng ishonchlisi.
   // Faqat u mavjud bo'lmasa, alohida yuklangan normRatesByFuelId'ga qaytamiz.
-const normRate =
+  const normRate =
     editForm.norm_at_time !== null && editForm.norm_at_time !== undefined
       ? Number(editForm.norm_at_time)
       : editForm.fuel_id &&
@@ -2229,9 +2233,6 @@ function CostPage() {
 
             // 2) FALLBACK: hali birorta ham yozuv bo'lmagan holat uchun
             // (yangi mashina/yoqilg'i), joriy normani AllNorms'dan olamiz.
-            // "norm_per_100km" kabi aniq nomlangan maydonlarga ustuvorlik
-            // beramiz, umumiy "rate"/"norm" nomlari boshqa maqsaddagi
-            // maydon bilan chalkashib ketmasligi uchun oxiriga qo'yamiz.
             try {
               const response = await apiCars.AllNorms(
                 1,
@@ -2303,7 +2304,7 @@ function CostPage() {
         // Oy boshidan bir kun oldingi sana
         const dateTo = getDayBeforeMonthStart(filters.year, filters.month);
 
-       const entries = await Promise.all(
+        const entries = await Promise.all(
           fuelTypes.map(async (f) => {
             try {
               const response = await apiCost.All(1, 1, {
@@ -2323,11 +2324,6 @@ function CostPage() {
                   return [f.id, Number(computed.balanceAfter)];
                 }
               }
-              // FALLBACK: hali birorta ham xarajat yozuvi bo'lmagan
-              // (yoki balanceAfter mavjud bo'lmagan) holatda, mashina
-              // ma'lumotidagi car_fuel_norms[].current_balance dan
-              // boshlang'ich qoldiqni olamiz — bu backend tomonidan
-              // mashinaga biriktirilgan haqiqiy joriy balans.
               const car = cars.find((c) => c.id === selectedCarId);
               const norm = car?.raw?.car_fuel_norms?.find(
                 (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
@@ -2428,7 +2424,12 @@ function CostPage() {
       return;
     }
 
+    // FIX: distance va received_amount kiritilmagan bo'lsa, ularni 0 deb
+    // hisoblab yuboramiz — shunda faqat yoqilg'i turi tanlangan bo'lsa
+    // ham yangi qator saqlanadi (sarflangan/yurgan km 0 bo'ladi).
     const distanceValue = values.distance === "" ? 0 : Number(values.distance);
+    const receivedAmountValue =
+      values.received_amount === "" ? 0 : Number(values.received_amount);
 
     setSavingDate(date);
     const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
@@ -2439,8 +2440,7 @@ function CostPage() {
         fuel_id: values.fuel_id,
         date,
         mileage: distanceValue,
-        received_amount:
-          values.received_amount === "" ? 0 : Number(values.received_amount),
+        received_amount: receivedAmountValue,
         is_holiday: values.is_holiday,
         note: "",
       });
@@ -2490,12 +2490,8 @@ function CostPage() {
 
   const saveEdit = async () => {
     if (!editingId) return;
-    if (
-      editForm.fuel_id === "" ||
-      editForm.odometer_start === "" ||
-      editForm.distance === ""
-    ) {
-      toastService.error("Yoqilg'i turi va yurgan km kerak");
+    if (editForm.fuel_id === "" || editForm.odometer_start === "") {
+      toastService.error("Yoqilg'i turi kerak");
       return;
     }
 
@@ -2510,7 +2506,7 @@ function CostPage() {
     try {
       await apiCost.Update(editingId, {
         fuel_id: editForm.fuel_id,
-        mileage: Number(editForm.distance),
+        mileage: editForm.distance === "" ? 0 : Number(editForm.distance),
         received_amount:
           editForm.received_amount === ""
             ? 0
