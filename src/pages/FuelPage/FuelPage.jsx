@@ -47,9 +47,8 @@ const getFuelTheme = (name) => {
   if (!name) return { token: "teal.400" };
   const t = name.toLowerCase();
   if (t.includes("benzin") || t.includes("ai")) return { token: "orange.400" };
-  if (t.includes("metan") || t.includes("gaz")) return { token: "cyan.400" };
+  if (t.includes("Gaz") || t.includes("gaz")) return { token: "cyan.400" };
   if (t.includes("propan")) return { token: "purple.400" };
-  if (t.includes("Elektr")) return { token: "blue.300" };
   return { token: "teal.400" };
 };
 
@@ -398,7 +397,6 @@ export default function FuelPage() {
                 >
                   <option value="litr">Litr (L)</option>
                   <option value="m3">Kub metr (m³)</option>
-                  <option value="kwh">Kilovatt-soat (kWh)</option>
 
                  
                 </Select>
@@ -424,25 +422,17 @@ export default function FuelPage() {
                   borderColor="border"
                   _hover={{ borderColor: "primary" }}
                 >
-                  <option value="AI-92">AI-92</option>
-                  <option value="AI-95">AI-95</option>
-                  <option value="AI-98">AI-98</option>
-                  <option value="AI-100">AI-100</option>
-                  <option value="Elektr">Elektr</option>
-                  <option value="Metan">Metan</option>
+                  <option value="Benzin">Benzin</option>
+                  <option value="Metan">Gaz</option>
                   <option value="Propan">Propan</option>
-                  <option value="Dizel">Dizel</option>
-                  <option value="Dizel EKO">Dizel EKO</option>
+                  
 
                   {formData.name &&
                     ![
-                      "AI-92",
-                      "AI-95",
-                      "AI-98",
-                      "Metan",
+                      "Benzin",
+                      "Gaz",
                       "Propan",
-                      "Dizel",
-                      "Dizel EKO",
+                     
                     ].includes(formData.name) && (
                       <option value={formData.name}>{formData.name}</option>
                     )}
