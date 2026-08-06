@@ -385,6 +385,10 @@ function normalizeCar(raw) {
     plate: plate ? String(plate) : null,
     odometer:
       odometer !== null && odometer !== undefined ? Number(odometer) : null,
+    // Xom obyektni saqlab qo'yamiz — car_fuel_norms kabi qo'shimcha
+    // maydonlarga keyinchalik (masalan lastBalance fallback uchun)
+    // kirish imkonini beradi.
+    raw,
   };
 }
 
@@ -1148,21 +1152,27 @@ function DayEntryRow({
     odometerStart !== "" && hasDistance
       ? Number(odometerStart) + Number(distance)
       : null;
-  const normRate =
+const normRate =
     fuelId && normRatesByFuelId && normRatesByFuelId[fuelId] !== undefined
       ? normRatesByFuelId[fuelId]
       : null;
+  const normKnown = normRate !== null && normRate !== undefined;
   const estimatedFuelConsumed =
-    normRate !== null && hasDistance
-      ? (Number(distance) * normRate) / 100
-      : null;
+    normKnown && hasDistance ? (Number(distance) * normRate) / 100 : null;
 
+  // "Qoldiq" ustuni: TO'LIQ FORMULA — oldingi qoldiq + olingan − sarflangan.
+  // Masofa kiritilishi bilanoq avtomatik hisoblanadi. Masalan: oldingi
+  // qoldiq 10 litr, sarflangan 2.4 litr bo'lsa, natija 7.6 litr bo'lib
+  // chiqadi (10 + 0 - 2.4 = 7.6).
   const computedBalanceAfter =
-    fuelId && hasDistance
+    fuelId && hasDistance && normKnown
       ? Number(lastBalance) +
         (receivedAmount === "" ? 0 : Number(receivedAmount)) -
-        (estimatedFuelConsumed || 0)
-      : null;
+        estimatedFuelConsumed
+      : fuelId
+        ? Number(lastBalance) +
+          (receivedAmount === "" ? 0 : Number(receivedAmount))
+        : null;
 
   const isValid = !disabled && !!fuelId && odometerStart !== "" && hasDistance;
 
@@ -1297,7 +1307,7 @@ function EditRowInline({
   // Avval yozuvning O'ZIDA saqlangan aniq normani ishlatamiz (norm_at_time) —
   // bu backend haqiqatda ishlatgan qiymat, shuning uchun eng ishonchlisi.
   // Faqat u mavjud bo'lmasa, alohida yuklangan normRatesByFuelId'ga qaytamiz.
-  const normRate =
+const normRate =
     editForm.norm_at_time !== null && editForm.norm_at_time !== undefined
       ? Number(editForm.norm_at_time)
       : editForm.fuel_id &&
@@ -1305,8 +1315,9 @@ function EditRowInline({
           normRatesByFuelId[editForm.fuel_id] !== undefined
         ? normRatesByFuelId[editForm.fuel_id]
         : null;
+  const normKnown = normRate !== null && normRate !== undefined;
   const estimatedFuelConsumed =
-    normRate !== null && hasDistance
+    normKnown && hasDistance
       ? (Number(editForm.distance) * normRate) / 100
       : null;
 
@@ -1315,14 +1326,20 @@ function EditRowInline({
     ? Number(balancesByFuelId?.[editForm.fuel_id] ?? 0)
     : 0;
 
+  // "Qoldiq" ustuni: TO'LIQ FORMULA — oldingi qoldiq + olingan − sarflangan.
   const computedBalanceAfter =
-    editForm.fuel_id && hasDistance
+    editForm.fuel_id && hasDistance && normKnown
       ? Number(lastBalance) +
         (editForm.received_amount === ""
           ? 0
           : Number(editForm.received_amount)) -
-        (estimatedFuelConsumed || 0)
-      : null;
+        estimatedFuelConsumed
+      : editForm.fuel_id
+        ? Number(lastBalance) +
+          (editForm.received_amount === ""
+            ? 0
+            : Number(editForm.received_amount))
+        : null;
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
@@ -2286,7 +2303,7 @@ function CostPage() {
         // Oy boshidan bir kun oldingi sana
         const dateTo = getDayBeforeMonthStart(filters.year, filters.month);
 
-        const entries = await Promise.all(
+       const entries = await Promise.all(
           fuelTypes.map(async (f) => {
             try {
               const response = await apiCost.All(1, 1, {
@@ -2296,26 +2313,40 @@ function CostPage() {
                 sortBy: "date",
                 sortOrder: "DESC",
               });
-              // MUHIM TUZATISH: boshqa hamma joyda bo'lgani kabi
-              // `response?.data` dan o'qish kerak, aks holda
-              // apiCost.All axios javobini qaytarganda extractList
-              // hech qachon massiv topa olmaydi va doim bo'sh []
-              // qaytaradi -> oldingi qoldiq har doim 0 deb
-              // hisoblanadi (shu sababli "Qoldiq" ustunida
-              // -1 kabi noto'g'ri qiymatlar chiqar edi).
               const list = extractList(response?.data);
               if (list.length > 0) {
                 const computed = extractComputed(list[0]);
-                return [
-                  f.id,
-                  computed.balanceAfter !== null
-                    ? Number(computed.balanceAfter)
-                    : 0,
-                ];
+                if (
+                  computed.balanceAfter !== null &&
+                  computed.balanceAfter !== undefined
+                ) {
+                  return [f.id, Number(computed.balanceAfter)];
+                }
+              }
+              // FALLBACK: hali birorta ham xarajat yozuvi bo'lmagan
+              // (yoki balanceAfter mavjud bo'lmagan) holatda, mashina
+              // ma'lumotidagi car_fuel_norms[].current_balance dan
+              // boshlang'ich qoldiqni olamiz — bu backend tomonidan
+              // mashinaga biriktirilgan haqiqiy joriy balans.
+              const car = cars.find((c) => c.id === selectedCarId);
+              const norm = car?.raw?.car_fuel_norms?.find(
+                (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
+              );
+              if (norm && norm.current_balance !== undefined) {
+                return [f.id, Number(norm.current_balance)];
               }
               return [f.id, 0];
             } catch (e) {
-              if (isNotFoundError(e)) return [f.id, 0];
+              if (isNotFoundError(e)) {
+                const car = cars.find((c) => c.id === selectedCarId);
+                const norm = car?.raw?.car_fuel_norms?.find(
+                  (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
+                );
+                if (norm && norm.current_balance !== undefined) {
+                  return [f.id, Number(norm.current_balance)];
+                }
+                return [f.id, 0];
+              }
               return [f.id, null];
             }
           }),
