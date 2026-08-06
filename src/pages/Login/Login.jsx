@@ -143,8 +143,7 @@ export default function Login() {
       <Flex
         w={{ base: "100%", md: "50%", lg: "45%", xl: "40%" }}
         h="100vh"
-        align
-        ="center"
+        align="center"
         justify="center"
         p={{ base: 6, sm: 10, md: 12 }}
         bg="surface"
