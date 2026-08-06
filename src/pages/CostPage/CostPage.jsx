@@ -385,6 +385,10 @@ function normalizeCar(raw) {
     plate: plate ? String(plate) : null,
     odometer:
       odometer !== null && odometer !== undefined ? Number(odometer) : null,
+    // Xom obyektni saqlab qo'yamiz — car_fuel_norms kabi qo'shimcha
+    // maydonlarga keyinchalik (masalan lastBalance fallback uchun)
+    // kirish imkonini beradi.
+    raw,
   };
 }
 
@@ -1152,19 +1156,30 @@ function DayEntryRow({
     fuelId && normRatesByFuelId && normRatesByFuelId[fuelId] !== undefined
       ? normRatesByFuelId[fuelId]
       : null;
+  const normKnown = normRate !== null && normRate !== undefined;
   const estimatedFuelConsumed =
-    normRate !== null && hasDistance
-      ? (Number(distance) * normRate) / 100
-      : null;
+    normKnown && hasDistance ? (Number(distance) * normRate) / 100 : null;
 
+  // "Qoldiq" ustuni: TO'LIQ FORMULA — oldingi qoldiq + olingan − sarflangan.
+  // Masofa kiritilishi bilanoq avtomatik hisoblanadi. Masalan: oldingi
+  // qoldiq 10 litr, sarflangan 2.4 litr bo'lsa, natija 7.6 litr bo'lib
+  // chiqadi (10 + 0 - 2.4 = 7.6).
   const computedBalanceAfter =
-    fuelId && hasDistance
+    fuelId && hasDistance && normKnown
       ? Number(lastBalance) +
         (receivedAmount === "" ? 0 : Number(receivedAmount)) -
-        (estimatedFuelConsumed || 0)
-      : null;
+        estimatedFuelConsumed
+      : fuelId
+        ? Number(lastBalance) +
+          (receivedAmount === "" ? 0 : Number(receivedAmount))
+        : null;
 
-  const isValid = !disabled && !!fuelId && odometerStart !== "" && hasDistance;
+  // FIX: "Sarflangan yoqilg'i" va "Yurgan km" to'ldirilmagan bo'lsa ham,
+  // faqat yoqilg'i turi tanlangan (va boshlang'ich spidometr mavjud)
+  // bo'lishi bilanoq "+" (qo'shish) tugmasi bosiladigan bo'ladi.
+  // Avval bu joyda hasDistance ham talab qilinardi, shu sababli masofa
+  // kiritilmaguncha tugma disabled bo'lib qolardi.
+  const isValid = !disabled && !!fuelId && odometerStart !== "";
 
   const handleAdd = () => {
     if (!fuelId) return;
@@ -1286,8 +1301,7 @@ function EditRowInline({
     editForm.odometer_start !== "" && hasDistance
       ? Number(editForm.odometer_start) + Number(editForm.distance)
       : null;
-  const isValid =
-    editForm.fuel_id !== "" && editForm.odometer_start !== "" && hasDistance;
+  const isValid = editForm.fuel_id !== "" && editForm.odometer_start !== "";
   const fuelMeta = editForm.fuel_id ? fuelTypesById[editForm.fuel_id] : null;
   const selectedUnit = editForm.fuel_id ? fuelMeta?.unit || "litr" : "";
   const estimatedSum =
@@ -1305,8 +1319,9 @@ function EditRowInline({
           normRatesByFuelId[editForm.fuel_id] !== undefined
         ? normRatesByFuelId[editForm.fuel_id]
         : null;
+  const normKnown = normRate !== null && normRate !== undefined;
   const estimatedFuelConsumed =
-    normRate !== null && hasDistance
+    normKnown && hasDistance
       ? (Number(editForm.distance) * normRate) / 100
       : null;
 
@@ -1315,14 +1330,20 @@ function EditRowInline({
     ? Number(balancesByFuelId?.[editForm.fuel_id] ?? 0)
     : 0;
 
+  // "Qoldiq" ustuni: TO'LIQ FORMULA — oldingi qoldiq + olingan − sarflangan.
   const computedBalanceAfter =
-    editForm.fuel_id && hasDistance
+    editForm.fuel_id && hasDistance && normKnown
       ? Number(lastBalance) +
         (editForm.received_amount === ""
           ? 0
           : Number(editForm.received_amount)) -
-        (estimatedFuelConsumed || 0)
-      : null;
+        estimatedFuelConsumed
+      : editForm.fuel_id
+        ? Number(lastBalance) +
+          (editForm.received_amount === ""
+            ? 0
+            : Number(editForm.received_amount))
+        : null;
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
@@ -2212,9 +2233,6 @@ function CostPage() {
 
             // 2) FALLBACK: hali birorta ham yozuv bo'lmagan holat uchun
             // (yangi mashina/yoqilg'i), joriy normani AllNorms'dan olamiz.
-            // "norm_per_100km" kabi aniq nomlangan maydonlarga ustuvorlik
-            // beramiz, umumiy "rate"/"norm" nomlari boshqa maqsaddagi
-            // maydon bilan chalkashib ketmasligi uchun oxiriga qo'yamiz.
             try {
               const response = await apiCars.AllNorms(
                 1,
@@ -2296,26 +2314,35 @@ function CostPage() {
                 sortBy: "date",
                 sortOrder: "DESC",
               });
-              // MUHIM TUZATISH: boshqa hamma joyda bo'lgani kabi
-              // `response?.data` dan o'qish kerak, aks holda
-              // apiCost.All axios javobini qaytarganda extractList
-              // hech qachon massiv topa olmaydi va doim bo'sh []
-              // qaytaradi -> oldingi qoldiq har doim 0 deb
-              // hisoblanadi (shu sababli "Qoldiq" ustunida
-              // -1 kabi noto'g'ri qiymatlar chiqar edi).
               const list = extractList(response?.data);
               if (list.length > 0) {
                 const computed = extractComputed(list[0]);
-                return [
-                  f.id,
-                  computed.balanceAfter !== null
-                    ? Number(computed.balanceAfter)
-                    : 0,
-                ];
+                if (
+                  computed.balanceAfter !== null &&
+                  computed.balanceAfter !== undefined
+                ) {
+                  return [f.id, Number(computed.balanceAfter)];
+                }
+              }
+              const car = cars.find((c) => c.id === selectedCarId);
+              const norm = car?.raw?.car_fuel_norms?.find(
+                (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
+              );
+              if (norm && norm.current_balance !== undefined) {
+                return [f.id, Number(norm.current_balance)];
               }
               return [f.id, 0];
             } catch (e) {
-              if (isNotFoundError(e)) return [f.id, 0];
+              if (isNotFoundError(e)) {
+                const car = cars.find((c) => c.id === selectedCarId);
+                const norm = car?.raw?.car_fuel_norms?.find(
+                  (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
+                );
+                if (norm && norm.current_balance !== undefined) {
+                  return [f.id, Number(norm.current_balance)];
+                }
+                return [f.id, 0];
+              }
               return [f.id, null];
             }
           }),
@@ -2397,7 +2424,12 @@ function CostPage() {
       return;
     }
 
+    // FIX: distance va received_amount kiritilmagan bo'lsa, ularni 0 deb
+    // hisoblab yuboramiz — shunda faqat yoqilg'i turi tanlangan bo'lsa
+    // ham yangi qator saqlanadi (sarflangan/yurgan km 0 bo'ladi).
     const distanceValue = values.distance === "" ? 0 : Number(values.distance);
+    const receivedAmountValue =
+      values.received_amount === "" ? 0 : Number(values.received_amount);
 
     setSavingDate(date);
     const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
@@ -2408,8 +2440,7 @@ function CostPage() {
         fuel_id: values.fuel_id,
         date,
         mileage: distanceValue,
-        received_amount:
-          values.received_amount === "" ? 0 : Number(values.received_amount),
+        received_amount: receivedAmountValue,
         is_holiday: values.is_holiday,
         note: "",
       });
@@ -2459,12 +2490,8 @@ function CostPage() {
 
   const saveEdit = async () => {
     if (!editingId) return;
-    if (
-      editForm.fuel_id === "" ||
-      editForm.odometer_start === "" ||
-      editForm.distance === ""
-    ) {
-      toastService.error("Yoqilg'i turi va yurgan km kerak");
+    if (editForm.fuel_id === "" || editForm.odometer_start === "") {
+      toastService.error("Yoqilg'i turi kerak");
       return;
     }
 
@@ -2479,7 +2506,7 @@ function CostPage() {
     try {
       await apiCost.Update(editingId, {
         fuel_id: editForm.fuel_id,
-        mileage: Number(editForm.distance),
+        mileage: editForm.distance === "" ? 0 : Number(editForm.distance),
         received_amount:
           editForm.received_amount === ""
             ? 0
