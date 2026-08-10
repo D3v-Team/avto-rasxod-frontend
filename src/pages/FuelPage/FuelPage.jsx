@@ -411,7 +411,18 @@ export default function FuelPage() {
                 >
                   Markasi yoki Nomi
                 </FormLabel>
-                <Select
+                <Input
+                placeholder="Masalan: Benzin"
+                value={formData.name}
+                onChange={handleChange}
+                name="name"
+                focusBorderColor="primary"
+                color="text"
+                bg="surface"
+                borderColor="border"
+                _hover={{ borderColor: "primary" }}
+                />
+                {/* <Select
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
@@ -436,7 +447,7 @@ export default function FuelPage() {
                     ].includes(formData.name) && (
                       <option value={formData.name}>{formData.name}</option>
                     )}
-                </Select>
+                </Select> */}
               </FormControl>
 
               {/* Narxi */}

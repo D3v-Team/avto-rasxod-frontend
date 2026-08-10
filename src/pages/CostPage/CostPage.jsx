@@ -172,10 +172,6 @@ const EMPTY_EDIT_FORM = {
   distance: "",
   received_amount: "",
   is_holiday: false,
-  // Yozuv saqlanganda backend ishlatgan ANIQ norma (norm_per_100km_at_time).
-  // Shu qiymat mavjud bo'lsa, tahrirlashdagi taxminiy hisob-kitob uchun
-  // AllNorms'dan qayta olingan normadan emas, aynan shundan foydalanamiz —
-  // shunda saqlashdan oldin va keyin ko'rsatiladigan raqamlar bir xil bo'ladi.
   norm_at_time: null,
 };
 
@@ -454,6 +450,35 @@ function extractComputed(row) {
       null,
     ),
   };
+}
+
+function extractLatestNormRatesFromDays(days) {
+  const latestByFuel = {};
+  (days || []).forEach((day) => {
+    const expenses = Array.isArray(day.expenses) ? day.expenses : [];
+    expenses.forEach((exp) => {
+      if (!exp || !exp.fuel_id) return;
+      const normAtTime = extractComputed(exp).normAtTime;
+      if (
+        normAtTime === null ||
+        normAtTime === undefined ||
+        Number.isNaN(Number(normAtTime))
+      ) {
+        return;
+      }
+      const timestamp = new Date(exp.date || day.date).getTime() || 0;
+      const existing = latestByFuel[exp.fuel_id];
+      if (!existing || timestamp > existing.timestamp) {
+        latestByFuel[exp.fuel_id] = {
+          value: Number(normAtTime),
+          timestamp,
+        };
+      }
+    });
+  });
+  return Object.fromEntries(
+    Object.entries(latestByFuel).map(([fuelId, entry]) => [fuelId, entry.value]),
+  );
 }
 
 function buildMonthDayRows(days) {
@@ -1126,6 +1151,9 @@ function DayEntryRow({
   selectedCarId,
   normRatesByFuelId,
   balancesByFuelId,
+  onCancel,
+  showDate = true,
+  dateRowSpan = 1,
 }) {
   const [fuelId, setFuelId] = useState("");
   const [receivedAmount, setReceivedAmount] = useState("");
@@ -1194,9 +1222,17 @@ function DayEntryRow({
 
   return (
     <Tr bg={rowBaseBg} borderBottomWidth="1px" borderColor="border">
-      <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
-        {formatDate(row.date)}
-      </Td>
+      {showDate && (
+        <Td
+          fontWeight="semibold"
+          color="text"
+          borderColor="border"
+          py={3.5}
+          rowSpan={dateRowSpan}
+        >
+          {formatDate(row.date)}
+        </Td>
+      )}
       <Td borderColor="border">
         {fuelTypesLoading ? (
           <Skeleton h="32px" borderRadius="md" />
@@ -1265,16 +1301,29 @@ function DayEntryRow({
         </HStack>
       </Td>
       <Td borderColor="border">
-        <IconButton
-          aria-label="Saqlash"
-          icon={<Plus size={16} />}
-          size="sm"
-          colorScheme="primary"
-          borderRadius="md"
-          onClick={handleAdd}
-          isDisabled={disabled || !isValid}
-          isLoading={isSaving}
-        />
+        <HStack spacing={1}>
+          <IconButton
+            aria-label="Saqlash"
+            icon={<Plus size={16} />}
+            size="sm"
+            colorScheme="primary"
+            borderRadius="md"
+            onClick={handleAdd}
+            isDisabled={disabled || !isValid}
+            isLoading={isSaving}
+          />
+          {onCancel && (
+            <IconButton
+              aria-label="Bekor qilish"
+              icon={<X size={16} />}
+              size="sm"
+              variant="ghost"
+              borderRadius="md"
+              onClick={onCancel}
+              isDisabled={isSaving}
+            />
+          )}
+        </HStack>
       </Td>
     </Tr>
   );
@@ -1293,6 +1342,8 @@ function EditRowInline({
   selectedCarId,
   normRatesByFuelId,
   balancesByFuelId,
+  showDate = true,
+  dateRowSpan = 1,
 }) {
   const rowBg = useColorModeValue("accent.50", "whiteAlpha.150");
   const rowBorder = useColorModeValue("accent.100", "whiteAlpha.300");
@@ -1308,9 +1359,6 @@ function EditRowInline({
     editForm.fuel_id && fuelMeta?.price && editForm.received_amount !== ""
       ? Number(editForm.received_amount) * Number(fuelMeta.price)
       : null;
-  // Avval yozuvning O'ZIDA saqlangan aniq normani ishlatamiz (norm_at_time) —
-  // bu backend haqiqatda ishlatgan qiymat, shuning uchun eng ishonchlisi.
-  // Faqat u mavjud bo'lmasa, alohida yuklangan normRatesByFuelId'ga qaytamiz.
   const normRate =
     editForm.norm_at_time !== null && editForm.norm_at_time !== undefined
       ? Number(editForm.norm_at_time)
@@ -1325,7 +1373,6 @@ function EditRowInline({
       ? (Number(editForm.distance) * normRate) / 100
       : null;
 
-  // OLDINGI QOLDIQ – faqat balancesByFuelId dan
   const lastBalance = editForm.fuel_id
     ? Number(balancesByFuelId?.[editForm.fuel_id] ?? 0)
     : 0;
@@ -1347,9 +1394,17 @@ function EditRowInline({
 
   return (
     <Tr bg={rowBg} borderBottomWidth="1px" borderColor={rowBorder}>
-      <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
-        {formatDate(editForm.date)}
-      </Td>
+      {showDate && (
+        <Td
+          fontWeight="semibold"
+          color="text"
+          borderColor="border"
+          py={3.5}
+          rowSpan={dateRowSpan}
+        >
+          {formatDate(editForm.date)}
+        </Td>
+      )}
       <Td borderColor="border">
         {fuelTypesLoading ? (
           <Skeleton h="32px" borderRadius="md" />
@@ -1451,6 +1506,11 @@ function DataRow({
   editingId,
   onStartEdit,
   onDelete,
+  addingForRowId,
+  onStartAdd,
+  canAdd,
+  showDate = true,
+  dateRowSpan = 1,
 }) {
   const {
     distance,
@@ -1483,6 +1543,8 @@ function DataRow({
         : null;
 
   const showActions = editingId === null;
+  const isAddOpenElsewhere =
+    addingForRowId !== null && addingForRowId !== row.id;
 
   return (
     <Tr
@@ -1490,9 +1552,17 @@ function DataRow({
       _hover={{ bg: "primaryBg" }}
       transition="background 0.15s ease"
     >
-      <Td fontWeight="semibold" color="text" borderColor="border" py={3.5}>
-        {formatDate(row.date)}
-      </Td>
+      {showDate && (
+        <Td
+          fontWeight="semibold"
+          color="text"
+          borderColor="border"
+          py={3.5}
+          rowSpan={dateRowSpan}
+        >
+          {formatDate(row.date)}
+        </Td>
+      )}
       <Td borderColor="border">
         <FuelBadge
           fuelId={row.fuel_id}
@@ -1532,6 +1602,17 @@ function DataRow({
         {showActions ? (
           <HStack spacing={1}>
             <IconButton
+              aria-label="Yoqilg'i qo'shish"
+              icon={<Plus size={14} />}
+              size="sm"
+              variant="ghost"
+              borderRadius="md"
+              color="primary.500"
+              _hover={{ bg: "primaryBg" }}
+              onClick={() => onStartAdd(row)}
+              isDisabled={isAddOpenElsewhere || !canAdd}
+            />
+            <IconButton
               aria-label="Tahrirlash"
               icon={<Pencil size={14} />}
               size="sm"
@@ -1540,7 +1621,7 @@ function DataRow({
               color="blue.500"
               _hover={{ bg: "blue.50", color: "blue.600" }}
               onClick={() => onStartEdit(row)}
-              isDisabled={editingId !== null}
+              isDisabled={editingId !== null || addingForRowId !== null}
             />
             <IconButton
               aria-label="O'chirish"
@@ -1551,7 +1632,7 @@ function DataRow({
               color="red.500"
               _hover={{ bg: "red.50", color: "red.600" }}
               onClick={() => onDelete(row)}
-              isDisabled={editingId !== null}
+              isDisabled={editingId !== null || addingForRowId !== null}
             />
           </HStack>
         ) : (
@@ -1768,6 +1849,42 @@ function TotalsSummaryTable({ totals }) {
   );
 }
 
+// Bir xil sanaga tegishli ketma-ket qatorlarni guruhlaydi, shunda "Sana"
+// ustuni har bir guruh uchun faqat bitta marta (rowSpan bilan) ko'rsatiladi.
+// "+" orqali ochilgan inline qo'shish qatori ham (agar shu guruhga tegishli
+// bo'lsa) rowSpan hisobiga qo'shiladi.
+function buildDateRowPlans(items, addingForRowId) {
+  const plans = [];
+  let i = 0;
+  let groupIndex = 0;
+  while (i < items.length) {
+    const dateKey = String(items[i].date || "").slice(0, 10);
+    let j = i;
+    while (
+      j < items.length &&
+      String(items[j].date || "").slice(0, 10) === dateKey
+    ) {
+      j++;
+    }
+    const groupItems = items.slice(i, j);
+    const hasOpenAdd = groupItems.some(
+      (r) => !r.__placeholder && r.id === addingForRowId,
+    );
+    const totalSpan = groupItems.length + (hasOpenAdd ? 1 : 0);
+    groupItems.forEach((row, k) => {
+      plans.push({
+        row,
+        showDate: k === 0,
+        dateRowSpan: totalSpan,
+        groupIndex,
+      });
+    });
+    groupIndex++;
+    i = j;
+  }
+  return plans;
+}
+
 function ExpenseTable({
   items,
   loading,
@@ -1788,6 +1905,10 @@ function ExpenseTable({
   selectedCarId,
   normRatesByFuelId,
   balanceBeforeByRow,
+  addingForRowId,
+  onStartAdd,
+  onCancelAdd,
+  usedFuelIdsByDate,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1833,7 +1954,7 @@ function ExpenseTable({
     </Thead>
   );
 
-  const renderRow = (row, idx) => {
+  const renderRow = (row, idx, showDate, dateRowSpan) => {
     const rowKey = row.__placeholder ? `placeholder-${row.date}` : row.id;
     const rowBalances =
       (balanceBeforeByRow && balanceBeforeByRow[rowKey]) || {};
@@ -1855,6 +1976,8 @@ function ExpenseTable({
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           balancesByFuelId={rowBalances}
+          showDate={showDate}
+          dateRowSpan={dateRowSpan}
         />
       );
     }
@@ -1873,9 +1996,19 @@ function ExpenseTable({
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           balancesByFuelId={rowBalances}
+          showDate={showDate}
+          dateRowSpan={dateRowSpan}
         />
       );
     }
+
+    // Ushbu sana uchun allaqachon ishlatilgan yoqilg'i turlarini aniqlaymiz,
+    // shunda "+" action orqali faqat hali ishlatilmagan fuel turlari
+    // taklif qilinadi (duplicate fuel + date oldini olish uchun).
+    const dateKey = String(row.date || "").slice(0, 10);
+    const usedFuelIds = (usedFuelIdsByDate && usedFuelIdsByDate[dateKey]) || new Set();
+    const canAdd = fuelTypes.some((f) => !usedFuelIds.has(f.id));
+
     return (
       <DataRow
         key={row.id}
@@ -1885,6 +2018,44 @@ function ExpenseTable({
         editingId={editingId}
         onStartEdit={onStartEdit}
         onDelete={onDelete}
+        addingForRowId={addingForRowId}
+        onStartAdd={onStartAdd}
+        canAdd={canAdd}
+        showDate={showDate}
+        dateRowSpan={dateRowSpan}
+      />
+    );
+  };
+
+  // "+" bosilgan DataRow'dan keyin, xuddi shu sana uchun yangi (hali
+  // ishlatilmagan) fuel turlarini tanlash imkonini beruvchi inline
+  // DayEntryRow qo'shamiz. Bu alohida table/modal emas — bitta table
+  // ichidagi qo'shimcha <Tr>.
+  const renderInlineAddRow = (row, idx) => {
+    if (row.__placeholder || row.id !== addingForRowId) return null;
+    const dateKey = String(row.date || "").slice(0, 10);
+    const usedFuelIds = (usedFuelIdsByDate && usedFuelIdsByDate[dateKey]) || new Set();
+    const availableFuelTypes = fuelTypes.filter((f) => !usedFuelIds.has(f.id));
+    const rowBalances = (balanceBeforeByRow && balanceBeforeByRow[row.id]) || {};
+
+    return (
+      <DayEntryRow
+        key={`add-${row.id}`}
+        row={{ date: row.date, odometer_start: row.odometer_start }}
+        idx={idx}
+        onAdd={onAddForDate}
+        isSaving={savingDate === row.date}
+        fuelTypes={availableFuelTypes}
+        fuelTypesLoading={fuelTypesLoading}
+        fuelTypesById={fuelTypesById}
+        disabled={
+          noCarSelected || (savingDate !== null && savingDate !== row.date)
+        }
+        selectedCarId={selectedCarId}
+        normRatesByFuelId={normRatesByFuelId}
+        balancesByFuelId={rowBalances}
+        onCancel={onCancelAdd}
+        showDate={false}
       />
     );
   };
@@ -1927,7 +2098,27 @@ function ExpenseTable({
               </Td>
             </Tr>
           )}
-          {!loading && items.map((row, i) => renderRow(row, i))}
+          {!loading &&
+  (() => {
+    const rowPlans = buildDateRowPlans(items, addingForRowId);
+    return rowPlans.map((plan) => (
+      <React.Fragment
+        key={
+          plan.row.__placeholder
+            ? `ph-${plan.row.date}`
+            : plan.row.id
+        }
+      >
+        {renderRow(
+          plan.row,
+          plan.groupIndex,
+          plan.showDate,
+          plan.dateRowSpan,
+        )}
+        {renderInlineAddRow(plan.row, plan.groupIndex)}
+      </React.Fragment>
+    ));
+  })()}
         </Tbody>
       </Table>
     </TableContainer>
@@ -2079,6 +2270,7 @@ function CostPage() {
   });
 
   const [rawDays, setRawDays] = useState([]);
+  const [expensesLoaded, setExpensesLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fuelTypes, setFuelTypes] = useState([]);
   const [fuelTypesLoading, setFuelTypesLoading] = useState(true);
@@ -2126,6 +2318,11 @@ function CostPage() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  // "+" bosilgan DataRow'ning id'sini saqlaydi — shu row ostida inline
+  // qo'shish formasi (DayEntryRow) ochiladi. Bir vaqtda faqat bitta
+  // qo'shish formasi ochiq bo'lishi mumkin.
+  const [addingForRowId, setAddingForRowId] = useState(null);
+
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const deleteDialog = useDisclosure();
@@ -2138,6 +2335,7 @@ function CostPage() {
     setSelectedCarId(id);
     setRawDays([]);
     setEditingId(null);
+    setAddingForRowId(null);
   };
 
   const loadExpenses = useCallback(
@@ -2183,6 +2381,20 @@ function CostPage() {
     return rows;
   }, [rawDays, filters.sortOrder]);
 
+  // Har bir sana (YYYY-MM-DD) uchun allaqachon ishlatilgan fuel_id'lar
+  // to'plami. "+" action orqali duplicate (bir xil sana + bir xil fuel)
+  // yozuv yaratilishining oldini olish uchun ishlatiladi.
+  const usedFuelIdsByDate = useMemo(() => {
+    const map = {};
+    expenses.forEach((row) => {
+      if (row.__placeholder || !row.fuel_id) return;
+      const dateKey = String(row.date || "").slice(0, 10);
+      if (!map[dateKey]) map[dateKey] = new Set();
+      map[dateKey].add(row.fuel_id);
+    });
+    return map;
+  }, [expenses]);
+
   const totals = useMemo(() => {
     const totalsRaw = computeTotalsFromExpenses(expenses, fuelTypesById);
     return totalsRaw.map(normalizeTotal);
@@ -2200,39 +2412,12 @@ function CostPage() {
       }
       if (!silent) setNormRatesLoading(true);
       try {
+        const existingRates = extractLatestNormRatesFromDays(rawDays);
+        const missingFuelTypes = fuelTypes.filter(
+          (f) => existingRates[f.id] === undefined,
+        );
         const entries = await Promise.all(
-          fuelTypes.map(async (f) => {
-            // 1) ENG ISHONCHLI MANBA: shu mashina + yoqilg'i uchun eng
-            // oxirgi haqiqiy saqlangan yozuvda backend ishlatgan aniq
-            // norma (norm_per_100km_at_time). Bu qiymat backend hozircha
-            // amalda qo'llayotgan normaga to'g'ridan-to'g'ri mos keladi,
-            // shuning uchun yangi qator qo'shishdagi taxminiy hisob-kitob
-            // saqlangandan keyingi haqiqiy natija bilan bir xil chiqadi.
-            try {
-              const latestResp = await apiCost.All(1, 1, {
-                car_id: selectedCarId,
-                fuel_id: f.id,
-                sortBy: "date",
-                sortOrder: "DESC",
-              });
-              const latestList = extractList(latestResp?.data);
-              if (latestList.length > 0) {
-                const latestComputed = extractComputed(latestList[0]);
-                const normVal = latestComputed.normAtTime;
-                if (
-                  normVal !== null &&
-                  normVal !== undefined &&
-                  !Number.isNaN(Number(normVal))
-                ) {
-                  return [f.id, Number(normVal)];
-                }
-              }
-            } catch (e) {
-              // e'tiborsiz qoldiramiz — pastdagi AllNorms fallback ishga tushadi
-            }
-
-            // 2) FALLBACK: hali birorta ham yozuv bo'lmagan holat uchun
-            // (yangi mashina/yoqilg'i), joriy normani AllNorms'dan olamiz.
+          missingFuelTypes.map(async (f) => {
             try {
               const response = await apiCars.AllNorms(
                 1,
@@ -2263,14 +2448,17 @@ function CostPage() {
             }
           }),
         );
-        setNormRatesByFuelId(Object.fromEntries(entries));
+        setNormRatesByFuelId({
+          ...Object.fromEntries(entries),
+          ...existingRates,
+        });
       } catch (e) {
         setNormRatesByFuelId({});
       } finally {
         if (!silent) setNormRatesLoading(false);
       }
     },
-    [selectedCarId, fuelTypes, carsLoading],
+    [selectedCarId, fuelTypes, carsLoading, rawDays],
   );
 
   useEffect(() => {
@@ -2288,7 +2476,6 @@ function CostPage() {
     return fuelTypes;
   }, [fuelTypes, normRatesByFuelId, selectedCarId]);
 
-  // ====== OY BOSHIDAGI QOLDIQ (lastBalanceByFuelId) ======
   const [lastBalanceByFuelId, setLastBalanceByFuelId] = useState({});
   const [lastBalancesLoading, setLastBalancesLoading] = useState(false);
 
@@ -2301,7 +2488,7 @@ function CostPage() {
       }
       if (!silent) setLastBalancesLoading(true);
       try {
-        // Oy boshidan bir kun oldingi sana
+
         const dateTo = getDayBeforeMonthStart(filters.year, filters.month);
 
         const entries = await Promise.all(
@@ -2413,20 +2600,24 @@ function CostPage() {
       return;
     }
 
+    // Endi cheklov faqat "date" bo'yicha emas, balki "date + fuel_id"
+    // bo'yicha: bitta sanaga bitta fuel turidan faqat bitta yozuv bo'lishi
+    // mumkin, lekin har xil fuel turlaridan bir nechta yozuv bo'lishi mumkin.
     if (
       expenses.some(
-        (e) => !e.__placeholder && String(e?.date || "").slice(0, 10) === date,
+        (e) =>
+          !e.__placeholder &&
+          String(e?.date || "").slice(0, 10) === date &&
+          e.fuel_id === values.fuel_id,
       )
     ) {
       toastService.error(
-        "Bu sanaga allaqachon xarajat kiritilgan. Bir kunga faqat bitta yozuv qo'shish mumkin.",
+        "Bu sanaga shu yoqilg'i turidan allaqachon xarajat kiritilgan. Bir kun + bir xil yoqilg'i uchun faqat bitta yozuv qo'shish mumkin.",
       );
       return;
     }
 
-    // FIX: distance va received_amount kiritilmagan bo'lsa, ularni 0 deb
-    // hisoblab yuboramiz — shunda faqat yoqilg'i turi tanlangan bo'lsa
-    // ham yangi qator saqlanadi (sarflangan/yurgan km 0 bo'ladi).
+
     const distanceValue = values.distance === "" ? 0 : Number(values.distance);
     const receivedAmountValue =
       values.received_amount === "" ? 0 : Number(values.received_amount);
@@ -2446,6 +2637,7 @@ function CostPage() {
       });
       toastService.dismiss(loadingToastId);
       toastService.success("Yangi xarajat qo'shildi");
+      setAddingForRowId(null);
       await loadExpenses({ silent: true });
       await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
@@ -2520,13 +2712,25 @@ function CostPage() {
       await loadExpenses({ silent: true });
       await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
-      await loadNormRates({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
     } finally {
       setIsSavingEdit(false);
     }
+  };
+
+  // "+" bosilganda: shu row ostida inline qo'shish formasi ochiladi.
+  // Modal yo'q, yangi table yo'q — faqat addingForRowId state'ini
+  // o'rnatamiz, qolgan hammasi ExpenseTable/DataRow/DayEntryRow orqali
+  // render qilinadi.
+  const startAdd = (row) => {
+    if (row.__placeholder) return;
+    setAddingForRowId(row.id);
+  };
+
+  const cancelAdd = () => {
+    setAddingForRowId(null);
   };
 
   const askDelete = (row) => {
@@ -2547,7 +2751,6 @@ function CostPage() {
       await loadExpenses({ silent: true });
       await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
-      await loadNormRates({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("O'chirib bo'lmadi: " + err.message);
@@ -2702,6 +2905,10 @@ function CostPage() {
           selectedCarId={selectedCarId}
           normRatesByFuelId={normRatesByFuelId}
           balanceBeforeByRow={balanceBeforeByRow}
+          addingForRowId={addingForRowId}
+          onStartAdd={startAdd}
+          onCancelAdd={cancelAdd}
+          usedFuelIdsByDate={usedFuelIdsByDate}
         />
       </Box>
 
