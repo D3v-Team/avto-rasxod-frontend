@@ -5,7 +5,7 @@ import { useAuthStore } from "../../store/authStore";
 import { toastService } from "../../utils/toast";
 import handleApiError from "./handleError";
 
-export const BASE_URL = "http://167.86.110.132:3030/api";
+export const BASE_URL = "https://dev.avtorasxod.uz/api";
 
 export const $api = axios.create({
     baseURL: `${BASE_URL}`,
