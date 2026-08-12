@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import {
   Box,
   Flex,
@@ -477,7 +483,10 @@ function extractLatestNormRatesFromDays(days) {
     });
   });
   return Object.fromEntries(
-    Object.entries(latestByFuel).map(([fuelId, entry]) => [fuelId, entry.value]),
+    Object.entries(latestByFuel).map(([fuelId, entry]) => [
+      fuelId,
+      entry.value,
+    ]),
   );
 }
 
@@ -1154,11 +1163,14 @@ function DayEntryRow({
   onCancel,
   showDate = true,
   dateRowSpan = 1,
+  items,
+  lastPriceByFuelId,
 }) {
   const [fuelId, setFuelId] = useState("");
   const [receivedAmount, setReceivedAmount] = useState("");
   const [distance, setDistance] = useState("");
   const [isHoliday, setIsHoliday] = useState(false);
+  const [fuelPrice, setFuelPrice] = useState("");
 
   const rowBaseBg = idx % 2 === 1 ? "bg" : "surface";
   const fuelMeta = fuelId ? fuelTypesById?.[fuelId] : null;
@@ -1168,8 +1180,9 @@ function DayEntryRow({
   const lastBalance = fuelId ? Number(balancesByFuelId?.[fuelId] ?? 0) : 0;
 
   const estimatedSum =
-    fuelId && fuelMeta?.price && receivedAmount !== ""
-      ? Number(receivedAmount) * Number(fuelMeta.price)
+    fuelId && fuelPrice !== ""
+      ? Number(receivedAmount === "" ? 0 : Number(receivedAmount)) *
+        Number(fuelPrice)
       : null;
   const hasDistance = distance !== "";
   const odometerStart =
@@ -1189,9 +1202,6 @@ function DayEntryRow({
     normKnown && hasDistance ? (Number(distance) * normRate) / 100 : null;
 
   // "Qoldiq" ustuni: TO'LIQ FORMULA — oldingi qoldiq + olingan − sarflangan.
-  // Masofa kiritilishi bilanoq avtomatik hisoblanadi. Masalan: oldingi
-  // qoldiq 10 litr, sarflangan 2.4 litr bo'lsa, natija 7.6 litr bo'lib
-  // chiqadi (10 + 0 - 2.4 = 7.6).
   const computedBalanceAfter =
     fuelId && hasDistance && normKnown
       ? Number(lastBalance) +
@@ -1202,23 +1212,83 @@ function DayEntryRow({
           (receivedAmount === "" ? 0 : Number(receivedAmount))
         : null;
 
-  // FIX: "Sarflangan yoqilg'i" va "Yurgan km" to'ldirilmagan bo'lsa ham,
-  // faqat yoqilg'i turi tanlangan (va boshlang'ich spidometr mavjud)
-  // bo'lishi bilanoq "+" (qo'shish) tugmasi bosiladigan bo'ladi.
-  // Avval bu joyda hasDistance ham talab qilinardi, shu sababli masofa
-  // kiritilmaguncha tugma disabled bo'lib qolardi.
   const isValid = !disabled && !!fuelId && odometerStart !== "";
+  const isFuelPurchased = receivedAmount !== "" && Number(receivedAmount) > 0;
+  const isPricePresent =
+    fuelPrice !== "" && fuelPrice !== null && fuelPrice !== undefined;
+  const isValidWithPrice =
+    isValid && (!isFuelPurchased || (isFuelPurchased && isPricePresent));
+  const showCancelButton = typeof onCancel === "function";
 
   const handleAdd = () => {
     if (!fuelId) return;
-    onAdd(row.date, {
+    const payload = {
       fuel_id: fuelId,
       odometer_start: odometerStart,
       distance,
       received_amount: receivedAmount,
       is_holiday: isHoliday,
-    });
+    };
+
+    if (isFuelPurchased) {
+      payload.fuel_price_at_time = Number(fuelPrice);
+    }
+
+    onAdd(row.date, payload);
   };
+
+  const handleCancel = () => {
+    setFuelId("");
+    setReceivedAmount("");
+    setDistance("");
+    setFuelPrice("");
+    setIsHoliday(false);
+    if (typeof onCancel === "function") onCancel();
+  };
+
+  const handleReceivedAmountChange = (val) => {
+    setReceivedAmount(val);
+    if (val === "" || Number(val) === 0) {
+      setFuelPrice("");
+    }
+  };
+
+  useEffect(() => {
+    // When fuel selection changes, suggest last price (prefer same-month earlier
+    // expense if available, otherwise fallback to precomputed lastPriceByFuelId)
+    // If the latest price is 0, use the previous non-zero price instead.
+    if (!fuelId) {
+      setFuelPrice("");
+      return;
+    }
+    const targetTs = new Date(row.date).getTime() || 0;
+    const candidates = [];
+    (items || []).forEach((it) => {
+      if (it.__placeholder) return;
+      if (!it.fuel_id || it.fuel_id !== fuelId) return;
+      const its = new Date(it.date).getTime() || 0;
+      if (its < targetTs) {
+        candidates.push({ ts: its, item: it });
+      }
+    });
+    candidates.sort((a, b) => b.ts - a.ts);
+    for (const candidate of candidates) {
+      const cp = extractComputed(candidate.item);
+      const amount = cp.priceAtTime;
+      if (
+        amount !== null &&
+        amount !== undefined &&
+        Number(amount) !== 0
+      ) {
+        setFuelPrice(String(amount));
+        return;
+      }
+    }
+    const fallback = lastPriceByFuelId && lastPriceByFuelId[fuelId];
+    setFuelPrice(
+      fallback !== undefined && fallback !== null ? String(fallback) : "",
+    );
+  }, [fuelId, row.date, items, lastPriceByFuelId]);
 
   return (
     <Tr bg={rowBaseBg} borderBottomWidth="1px" borderColor="border">
@@ -1255,8 +1325,18 @@ function DayEntryRow({
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
+          value={fuelPrice}
+          onChange={(val) => setFuelPrice(val)}
+          isDisabled={disabled || isSaving || !fuelId}
+          unit="so'm"
+          size="sm"
+        />
+       
+      </Td>
+      <Td isNumeric borderColor="border">
+        <UnitNumberInput
           value={receivedAmount}
-          onChange={(val) => setReceivedAmount(val)}
+          onChange={(val) => handleReceivedAmountChange(val)}
           isDisabled={disabled || isSaving || !fuelId}
           unit={selectedUnit}
           size="sm"
@@ -1309,18 +1389,18 @@ function DayEntryRow({
             colorScheme="primary"
             borderRadius="md"
             onClick={handleAdd}
-            isDisabled={disabled || !isValid}
+            isDisabled={disabled || !isValidWithPrice}
             isLoading={isSaving}
           />
-          {onCancel && (
+          {showCancelButton && (
             <IconButton
               aria-label="Bekor qilish"
               icon={<X size={16} />}
               size="sm"
-              variant="ghost"
+              variant="ghos"
               borderRadius="md"
-              onClick={onCancel}
-              isDisabled={isSaving}
+              onClick={handleCancel}
+              isDisabled={isSaving || !fuelId}
             />
           )}
         </HStack>
@@ -1353,6 +1433,14 @@ function EditRowInline({
       ? Number(editForm.odometer_start) + Number(editForm.distance)
       : null;
   const isValid = editForm.fuel_id !== "" && editForm.odometer_start !== "";
+  const isFuelPurchased =
+    editForm.received_amount !== "" && Number(editForm.received_amount) > 0;
+  const isPricePresent =
+    editForm.fuel_price_at_time !== "" &&
+    editForm.fuel_price_at_time !== null &&
+    editForm.fuel_price_at_time !== undefined;
+  const isValidWithPrice =
+    isValid && (!isFuelPurchased || (isFuelPurchased && isPricePresent));
   const fuelMeta = editForm.fuel_id ? fuelTypesById[editForm.fuel_id] : null;
   const selectedUnit = editForm.fuel_id ? fuelMeta?.unit || "litr" : "";
   const estimatedSum =
@@ -1427,8 +1515,23 @@ function EditRowInline({
       </Td>
       <Td isNumeric borderColor="border">
         <UnitNumberInput
+          value={editForm.fuel_price_at_time}
+          onChange={(val) => onChange({ fuel_price_at_time: val })}
+          isDisabled={isSaving || !editForm.fuel_id}
+          unit="so'm"
+          size="sm"
+        />
+      </Td>
+      <Td isNumeric borderColor="border">
+        <UnitNumberInput
           value={editForm.received_amount}
-          onChange={(val) => onChange({ received_amount: val })}
+          onChange={(val) =>
+            onChange(
+              val === "" || Number(val) === 0
+                ? { received_amount: val, fuel_price_at_time: "" }
+                : { received_amount: val },
+            )
+          }
           isDisabled={isSaving || !editForm.fuel_id}
           unit={selectedUnit}
           size="sm"
@@ -1481,7 +1584,7 @@ function EditRowInline({
             colorScheme="primary"
             borderRadius="md"
             onClick={onSave}
-            isDisabled={!isValid}
+            isDisabled={!isValidWithPrice}
             isLoading={isSaving}
           />
           <IconButton
@@ -1569,6 +1672,9 @@ function DataRow({
           fuelTypesById={fuelTypesById}
           fallback={row.fuel}
         />
+      </Td>
+      <Td isNumeric fontWeight="bold" color="text" borderColor="border">
+        <AutoCell value={effectivePrice} unit="so'm" />
       </Td>
       <Td isNumeric color="text" borderColor="border">
         {formatNumber(row.received_amount)} {fuelUnit}
@@ -1909,6 +2015,7 @@ function ExpenseTable({
   onStartAdd,
   onCancelAdd,
   usedFuelIdsByDate,
+  lastPriceByFuelId,
 }) {
   if (noCarSelected) {
     return <NoCarState />;
@@ -1922,6 +2029,9 @@ function ExpenseTable({
         </Th>
         <Th color="textSecondary" borderColor="border" w="9%">
           Yoqilg'i
+        </Th>
+        <Th color="textSecondary" borderColor="border" isNumeric w="9%">
+          Narx
         </Th>
         <Th color="textSecondary" borderColor="border" isNumeric w="11%">
           Olingan
@@ -1945,7 +2055,7 @@ function ExpenseTable({
           Qoldiq
         </Th>
         <Th color="textSecondary" borderColor="border" w="13%">
-          Holat
+          Dam olish kuni
         </Th>
         <Th borderColor="border" w="8%">
           Amallar
@@ -1977,7 +2087,10 @@ function ExpenseTable({
           normRatesByFuelId={normRatesByFuelId}
           balancesByFuelId={rowBalances}
           showDate={showDate}
+          items={items}
+          lastPriceByFuelId={lastPriceByFuelId}
           dateRowSpan={dateRowSpan}
+          onCancel={onCancelAdd}
         />
       );
     }
@@ -2006,7 +2119,8 @@ function ExpenseTable({
     // shunda "+" action orqali faqat hali ishlatilmagan fuel turlari
     // taklif qilinadi (duplicate fuel + date oldini olish uchun).
     const dateKey = String(row.date || "").slice(0, 10);
-    const usedFuelIds = (usedFuelIdsByDate && usedFuelIdsByDate[dateKey]) || new Set();
+    const usedFuelIds =
+      (usedFuelIdsByDate && usedFuelIdsByDate[dateKey]) || new Set();
     const canAdd = fuelTypes.some((f) => !usedFuelIds.has(f.id));
 
     return (
@@ -2034,9 +2148,11 @@ function ExpenseTable({
   const renderInlineAddRow = (row, idx) => {
     if (row.__placeholder || row.id !== addingForRowId) return null;
     const dateKey = String(row.date || "").slice(0, 10);
-    const usedFuelIds = (usedFuelIdsByDate && usedFuelIdsByDate[dateKey]) || new Set();
+    const usedFuelIds =
+      (usedFuelIdsByDate && usedFuelIdsByDate[dateKey]) || new Set();
     const availableFuelTypes = fuelTypes.filter((f) => !usedFuelIds.has(f.id));
-    const rowBalances = (balanceBeforeByRow && balanceBeforeByRow[row.id]) || {};
+    const rowBalances =
+      (balanceBeforeByRow && balanceBeforeByRow[row.id]) || {};
 
     return (
       <DayEntryRow
@@ -2056,6 +2172,8 @@ function ExpenseTable({
         balancesByFuelId={rowBalances}
         onCancel={onCancelAdd}
         showDate={false}
+        items={items}
+        lastPriceByFuelId={lastPriceByFuelId}
       />
     );
   };
@@ -2086,39 +2204,37 @@ function ExpenseTable({
           {loading &&
             [...Array(4)].map((_, i) => (
               <Tr key={`skeleton-${i}`}>
-                <Td colSpan={11} borderColor="border" py={2}>
+                <Td colSpan={12} borderColor="border" py={2}>
                   <Skeleton height="32px" borderRadius="md" />
                 </Td>
               </Tr>
             ))}
           {!loading && items.length === 0 && (
             <Tr>
-              <Td colSpan={11} border="none" p={0}>
+              <Td colSpan={12} border="none" p={0}>
                 <EmptyState />
               </Td>
             </Tr>
           )}
           {!loading &&
-  (() => {
-    const rowPlans = buildDateRowPlans(items, addingForRowId);
-    return rowPlans.map((plan) => (
-      <React.Fragment
-        key={
-          plan.row.__placeholder
-            ? `ph-${plan.row.date}`
-            : plan.row.id
-        }
-      >
-        {renderRow(
-          plan.row,
-          plan.groupIndex,
-          plan.showDate,
-          plan.dateRowSpan,
-        )}
-        {renderInlineAddRow(plan.row, plan.groupIndex)}
-      </React.Fragment>
-    ));
-  })()}
+            (() => {
+              const rowPlans = buildDateRowPlans(items, addingForRowId);
+              return rowPlans.map((plan) => (
+                <React.Fragment
+                  key={
+                    plan.row.__placeholder ? `ph-${plan.row.date}` : plan.row.id
+                  }
+                >
+                  {renderRow(
+                    plan.row,
+                    plan.groupIndex,
+                    plan.showDate,
+                    plan.dateRowSpan,
+                  )}
+                  {renderInlineAddRow(plan.row, plan.groupIndex)}
+                </React.Fragment>
+              ));
+            })()}
         </Tbody>
       </Table>
     </TableContainer>
@@ -2338,6 +2454,9 @@ function CostPage() {
     setAddingForRowId(null);
   };
 
+  const expensesRequestId = useRef(0);
+  const [reportTotalsRaw, setReportTotalsRaw] = useState([]);
+
   const loadExpenses = useCallback(
     async (opts = {}) => {
       const { silent = false } = opts;
@@ -2346,6 +2465,7 @@ function CostPage() {
         return;
       }
       if (!silent) setLoading(true);
+      const thisReq = ++expensesRequestId.current;
       try {
         const month = monthToYYYYMM(filters.year, filters.month);
         const data = await apiCost.CarMonthlyReport(
@@ -2354,7 +2474,15 @@ function CostPage() {
           filters.fuel_id || undefined,
         );
         const days = pick(data, ["days"], []);
-        setRawDays(days);
+        // only apply if this is the latest request
+        if (thisReq === expensesRequestId.current) {
+          setRawDays(days);
+        }
+        // store raw totals if backend provided them
+        const reportTotals = pick(data, ["totals"], null);
+        if (thisReq === expensesRequestId.current) {
+          setReportTotalsRaw(Array.isArray(reportTotals) ? reportTotals : []);
+        }
       } catch (err) {
         if (!isNotFoundError(err)) {
           toastService.error("Ro'yxatni yuklab bo'lmadi: " + err.message);
@@ -2403,6 +2531,12 @@ function CostPage() {
   const [normRatesByFuelId, setNormRatesByFuelId] = useState({});
   const [normRatesLoading, setNormRatesLoading] = useState(false);
 
+  const normRatesCache = useRef({
+    carId: null,
+    fuelTypeCount: 0,
+    rates: {},
+  });
+
   const loadNormRates = useCallback(
     async (opts = {}) => {
       const { silent = false } = opts;
@@ -2416,43 +2550,59 @@ function CostPage() {
         const missingFuelTypes = fuelTypes.filter(
           (f) => existingRates[f.id] === undefined,
         );
-        const entries = await Promise.all(
-          missingFuelTypes.map(async (f) => {
-            try {
-              const response = await apiCars.AllNorms(
-                1,
-                1,
-                selectedCarId,
-                f.id,
-              );
-              const list = extractList(response?.data);
-              const normRaw = list[0];
-              if (!normRaw) return [f.id, null];
-              const r = pick(
-                normRaw,
-                [
-                  "norm_per_100km",
-                  "fuel_per_100km",
-                  "consumption_per_100km",
-                  "rate_100km",
-                  "norm_100",
-                  "consumption_rate",
-                  "norm",
-                  "rate",
-                ],
-                null,
-              );
-              return [f.id, r !== null ? Number(r) : null];
-            } catch (e) {
-              return [f.id, null];
-            }
-          }),
-        );
+
+        let requestedRates = {};
+        const shouldFetchAllNorms =
+          missingFuelTypes.length > 0 &&
+          (selectedCarId !== normRatesCache.current.carId ||
+            fuelTypes.length !== normRatesCache.current.fuelTypeCount);
+
+        if (shouldFetchAllNorms) {
+          const response = await apiCars.AllNorms(
+            1,
+            Math.max(fuelTypes.length, 10),
+            selectedCarId,
+          );
+          const list = extractList(response?.data) || [];
+          requestedRates = fuelTypes.reduce((acc, f) => {
+            acc[f.id] = null;
+            return acc;
+          }, {});
+
+          list.forEach((normRaw) => {
+            if (!normRaw || !normRaw.fuel_id) return;
+            const r = pick(
+              normRaw,
+              [
+                "norm_per_100km",
+                "fuel_per_100km",
+                "consumption_per_100km",
+                "rate_100km",
+                "norm_100",
+                "consumption_rate",
+                "norm",
+                "rate",
+              ],
+              null,
+            );
+            requestedRates[normRaw.fuel_id] = r !== null ? Number(r) : null;
+          });
+
+          normRatesCache.current = {
+            carId: selectedCarId,
+            fuelTypeCount: fuelTypes.length,
+            rates: requestedRates,
+          };
+        } else if (missingFuelTypes.length > 0) {
+          requestedRates = normRatesCache.current.rates;
+        }
+
         setNormRatesByFuelId({
-          ...Object.fromEntries(entries),
+          ...requestedRates,
           ...existingRates,
         });
       } catch (e) {
+        normRatesCache.current = { carId: null, fuelTypeCount: 0, rates: {} };
         setNormRatesByFuelId({});
       } finally {
         if (!silent) setNormRatesLoading(false);
@@ -2478,65 +2628,72 @@ function CostPage() {
 
   const [lastBalanceByFuelId, setLastBalanceByFuelId] = useState({});
   const [lastBalancesLoading, setLastBalancesLoading] = useState(false);
+  const [lastPriceByFuelId, setLastPriceByFuelId] = useState({});
 
   const loadLastBalances = useCallback(
     async (opts = {}) => {
       const { silent = false } = opts;
       if (!selectedCarId || carsLoading || fuelTypes.length === 0) {
         setLastBalanceByFuelId({});
+        setLastPriceByFuelId({});
         return;
       }
       if (!silent) setLastBalancesLoading(true);
       try {
-
         const dateTo = getDayBeforeMonthStart(filters.year, filters.month);
 
-        const entries = await Promise.all(
-          fuelTypes.map(async (f) => {
-            try {
-              const response = await apiCost.All(1, 1, {
-                car_id: selectedCarId,
-                fuel_id: f.id,
-                date_to: dateTo,
-                sortBy: "date",
-                sortOrder: "DESC",
-              });
-              const list = extractList(response?.data);
-              if (list.length > 0) {
-                const computed = extractComputed(list[0]);
-                if (
-                  computed.balanceAfter !== null &&
-                  computed.balanceAfter !== undefined
-                ) {
-                  return [f.id, Number(computed.balanceAfter)];
-                }
-              }
-              const car = cars.find((c) => c.id === selectedCarId);
-              const norm = car?.raw?.car_fuel_norms?.find(
-                (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
-              );
-              if (norm && norm.current_balance !== undefined) {
-                return [f.id, Number(norm.current_balance)];
-              }
-              return [f.id, 0];
-            } catch (e) {
-              if (isNotFoundError(e)) {
-                const car = cars.find((c) => c.id === selectedCarId);
-                const norm = car?.raw?.car_fuel_norms?.find(
-                  (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
-                );
-                if (norm && norm.current_balance !== undefined) {
-                  return [f.id, Number(norm.current_balance)];
-                }
-                return [f.id, 0];
-              }
-              return [f.id, null];
+        // Try to fetch a batch of recent expenses before the month start for the car
+        // in a single request (avoids N+1 per-fuel calls). We request up to FETCH_LIMIT
+        // records sorted by date desc and then pick the latest per fuel.
+        const response = await apiCost.All(1, FETCH_LIMIT, {
+          car_id: selectedCarId,
+          date_to: dateTo,
+          sortBy: "date",
+          sortOrder: "DESC",
+        });
+        const list = extractList(response?.data) || [];
+
+        const balancesMap = {};
+        const pricesMap = {};
+        // iterate list (already sorted desc) and take first occurrence per fuel
+        for (const item of list) {
+          if (!item || !item.fuel_id) continue;
+          const fid = item.fuel_id;
+          if (balancesMap[fid] !== undefined && pricesMap[fid] !== undefined)
+            continue;
+          const computed = extractComputed(item);
+          balancesMap[fid] =
+            computed.balanceAfter !== null &&
+            computed.balanceAfter !== undefined
+              ? Number(computed.balanceAfter)
+              : null;
+          pricesMap[fid] =
+            computed.priceAtTime !== null && computed.priceAtTime !== undefined
+              ? Number(computed.priceAtTime)
+              : null;
+        }
+
+        // For fuels still missing, fallback to car.raw.car_fuel_norms or zero
+        for (const f of fuelTypes) {
+          if (balancesMap[f.id] === undefined || balancesMap[f.id] === null) {
+            const car = cars.find((c) => c.id === selectedCarId);
+            const norm = car?.raw?.car_fuel_norms?.find(
+              (n) => n.fuel?.name === f.label || n.fuel_id === f.id,
+            );
+            if (norm && norm.current_balance !== undefined) {
+              balancesMap[f.id] = Number(norm.current_balance);
+            } else if (balancesMap[f.id] === undefined) {
+              balancesMap[f.id] = 0;
             }
-          }),
-        );
-        setLastBalanceByFuelId(Object.fromEntries(entries));
+          }
+          if (pricesMap[f.id] === undefined) pricesMap[f.id] = null;
+        }
+
+        setLastBalanceByFuelId(balancesMap);
+        setLastPriceByFuelId(pricesMap);
       } catch (e) {
         setLastBalanceByFuelId({});
+        setLastPriceByFuelId({});
       } finally {
         if (!silent) setLastBalancesLoading(false);
       }
@@ -2617,16 +2774,26 @@ function CostPage() {
       return;
     }
 
-
     const distanceValue = values.distance === "" ? 0 : Number(values.distance);
     const receivedAmountValue =
       values.received_amount === "" ? 0 : Number(values.received_amount);
+
+    if (receivedAmountValue > 0) {
+      if (
+        values.fuel_price_at_time === undefined ||
+        values.fuel_price_at_time === null ||
+        values.fuel_price_at_time === ""
+      ) {
+        toastService.error("Yoqilg'i narxini kiriting");
+        return;
+      }
+    }
 
     setSavingDate(date);
     const loadingToastId = toastService.loading("Ma'lumot saqlanmoqda...");
 
     try {
-      await apiCost.Create({
+      const payload = {
         car_id: selectedCarId,
         fuel_id: values.fuel_id,
         date,
@@ -2634,14 +2801,17 @@ function CostPage() {
         received_amount: receivedAmountValue,
         is_holiday: values.is_holiday,
         note: "",
-      });
+      };
+      if (receivedAmountValue > 0) {
+        payload.fuel_price_at_time = Number(values.fuel_price_at_time);
+      }
+
+      await apiCost.Create(payload);
       toastService.dismiss(loadingToastId);
       toastService.success("Yangi xarajat qo'shildi");
       setAddingForRowId(null);
       await loadExpenses({ silent: true });
-      await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
-      await loadNormRates({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
       toastService.error("Saqlab bo'lmadi: " + err.message);
@@ -2653,7 +2823,8 @@ function CostPage() {
   const startEdit = (row) => {
     if (row.__placeholder) return;
     setEditingId(row.id);
-    const { distance, receivedAmount, normAtTime } = extractComputed(row);
+    const { distance, receivedAmount, normAtTime, priceAtTime } =
+      extractComputed(row);
     setEditForm({
       date: row.date?.slice(0, 10) || "",
       fuel_id: row.fuel_id,
@@ -2669,6 +2840,10 @@ function CostPage() {
         normAtTime !== undefined && normAtTime !== null
           ? Number(normAtTime)
           : null,
+      fuel_price_at_time:
+        priceAtTime !== undefined && priceAtTime !== null
+          ? String(priceAtTime)
+          : "",
     });
   };
 
@@ -2687,6 +2862,19 @@ function CostPage() {
       return;
     }
 
+    const editReceivedAmountValue =
+      editForm.received_amount === "" ? 0 : Number(editForm.received_amount);
+    if (editReceivedAmountValue > 0) {
+      if (
+        editForm.fuel_price_at_time === "" ||
+        editForm.fuel_price_at_time === null ||
+        editForm.fuel_price_at_time === undefined
+      ) {
+        toastService.error("Yoqilg'i narxini kiriting");
+        return;
+      }
+    }
+
     if (isFutureDate(editForm.date)) {
       toastService.error("Ertangi kun uchun ma'lumot tahrirlab bo'lmaydi!");
       return;
@@ -2696,7 +2884,7 @@ function CostPage() {
     const loadingToastId = toastService.loading("Yangilanmoqda...");
 
     try {
-      await apiCost.Update(editingId, {
+      const editPayload = {
         fuel_id: editForm.fuel_id,
         mileage: editForm.distance === "" ? 0 : Number(editForm.distance),
         received_amount:
@@ -2704,13 +2892,19 @@ function CostPage() {
             ? 0
             : Number(editForm.received_amount),
         is_holiday: editForm.is_holiday,
-      });
+      };
+      if (editReceivedAmountValue > 0) {
+        editPayload.fuel_price_at_time =
+          editForm.fuel_price_at_time === ""
+            ? null
+            : Number(editForm.fuel_price_at_time);
+      }
+      await apiCost.Update(editingId, editPayload);
 
       toastService.dismiss(loadingToastId);
       toastService.success("Yozuv yangilandi");
       cancelEdit();
       await loadExpenses({ silent: true });
-      await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
@@ -2719,11 +2913,6 @@ function CostPage() {
       setIsSavingEdit(false);
     }
   };
-
-  // "+" bosilganda: shu row ostida inline qo'shish formasi ochiladi.
-  // Modal yo'q, yangi table yo'q — faqat addingForRowId state'ini
-  // o'rnatamiz, qolgan hammasi ExpenseTable/DataRow/DayEntryRow orqali
-  // render qilinadi.
   const startAdd = (row) => {
     if (row.__placeholder) return;
     setAddingForRowId(row.id);
@@ -2749,7 +2938,6 @@ function CostPage() {
       toastService.success("Yozuv o'chirildi");
       deleteDialog.onClose();
       await loadExpenses({ silent: true });
-      await loadCars({ silent: true });
       await loadLastBalances({ silent: true });
     } catch (err) {
       toastService.dismiss(loadingToastId);
@@ -2766,7 +2954,6 @@ function CostPage() {
       toastService.error("Avval mashinani tanlang");
       return;
     }
-
     const year = filters.year;
     const month = filters.month;
 
@@ -2791,7 +2978,6 @@ function CostPage() {
         const match = disposition.match(/filename="?([^"]+)"?/);
         if (match && match[1]) fileName = match[1];
       }
-
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -2875,16 +3061,7 @@ function CostPage() {
         />
       </Box>
 
-      <Box
-        bg="surface"
-        borderRadius="2xl"
-        borderWidth="1px"
-        borderColor="border"
-        boxShadow="md"
-        overflow="hidden"
-        w="100%"
-        mt={6}
-      >
+      <Box bg="surface" borderRadius="2xl" borderWidth="1px" borderColor="border" boxShadow="md" overflow="hidden"  w="100%" mt={6} >
         <ExpenseTable
           items={expenses}
           loading={loading}
@@ -2909,6 +3086,7 @@ function CostPage() {
           onStartAdd={startAdd}
           onCancelAdd={cancelAdd}
           usedFuelIdsByDate={usedFuelIdsByDate}
+          lastPriceByFuelId={lastPriceByFuelId}
         />
       </Box>
 

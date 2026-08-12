@@ -188,11 +188,12 @@ export default function ZapchastPage() {
     if (filterYear && filterMonth) {
       const year = parseInt(filterYear);
       const month = parseInt(filterMonth);
-      const firstDay = new Date(year, month - 1, 1);
-      const lastDay = new Date(year, month, 0);
+      const pad = (value) => String(value).padStart(2, "0");
 
-      const from = firstDay.toISOString().slice(0, 10);
-      const to = lastDay.toISOString().slice(0, 10);
+      const from = `${year}-${pad(month)}-01`;
+
+      const lastDay = new Date(year, month, 0).getDate();
+      const to = `${year}-${pad(month)}-${pad(lastDay)}`;
 
       setDateFrom(from);
       setDateTo(to);
@@ -351,16 +352,15 @@ export default function ZapchastPage() {
           responseData.records ||
           (Array.isArray(responseData) ? responseData : []);
 
-        const mappedCars = rawCars.map((car) => ({
-          id: car.id,
-          name:
-            [car.brand, car.model].filter(Boolean).join(" ") ||
-            car.model ||
-            car.name ||
-            car.plate_number ||
-            car.gos_raqami ||
-            "Nomsiz mashina",
-        }));
+       const mappedCars = rawCars.map((car) => ({
+  id: car.id,
+  name:
+    [car.brand, car.model].filter(Boolean).join(" ") ||
+    car.model ||
+    car.name ||
+    "Nomsiz mashina",
+  plate_number: car.plate_number || car.gos_raqami || "",
+}));
 
         setCars(mappedCars);
       } catch (error) {
@@ -404,13 +404,15 @@ export default function ZapchastPage() {
     return pages;
   }, [safeCurrentPage, totalPages]);
 
-  const carNameById = useMemo(() => {
-    const map = {};
-    cars.forEach((c) => {
-      map[c.id] = c.name;
-    });
-    return map;
-  }, [cars]);
+ const carById = useMemo(() => {
+  const map = {};
+
+  cars.forEach((car) => {
+    map[car.id] = car;
+  });
+
+  return map;
+}, [cars]);
 
   const pageTotalSum = useMemo(
     () => parts.reduce((sum, p) => sum + (Number(p.total_price) || 0), 0),
@@ -911,7 +913,25 @@ export default function ZapchastPage() {
                             color="textSecondary"
                             fontSize="sm"
                           >
-                            {carNameById[part.car_id] || "—"}
+                        {carById[part.car_id] ? (
+  <VStack align="start" spacing={0}>
+    <Text color="textSecondary" fontSize="sm">
+      {carById[part.car_id].name}
+    </Text>
+
+    {carById[part.car_id].plate_number && (
+      <Text
+        color="textSecondary"
+        fontSize="xs"
+        opacity={0.7}
+      >
+        {carById[part.car_id].plate_number}
+      </Text>
+    )}
+  </VStack>
+) : (
+  "—"
+)}
                           </Td>
 
                           <Td
@@ -1138,7 +1158,8 @@ export default function ZapchastPage() {
                         value={car.id}
                         style={{ background: optionBg, color: optionColor }}
                       >
-                        {car.name}
+                    {car.name}
+{car.plate_number && ` — ${car.plate_number}`}
                       </option>
                     ))}
                   </Select>

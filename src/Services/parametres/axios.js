@@ -5,7 +5,6 @@ import { useAuthStore } from "../../store/authStore";
 import { toastService } from "../../utils/toast";
 import handleApiError from "./handleError";
 
-
 export const BASE_URL = "https://dev.avtorasxod.uz/api";
 
 export const $api = axios.create({
