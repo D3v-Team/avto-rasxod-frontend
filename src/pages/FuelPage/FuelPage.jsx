@@ -28,8 +28,7 @@ import {
   Icon,
   Select,
   SimpleGrid,
-  InputGroup,
-  InputRightElement,
+
   Portal,
 } from "@chakra-ui/react";
 import { MoreVertical, Edit, Trash2, Plus, Fuel } from "lucide-react";
@@ -39,7 +38,7 @@ import { apiFuel } from "../../Services/api/Fuels";
 const initialFormState = {
   unit: "",
   name: "",
-  price: "",
+ 
 };
 
 // Yoqilg'i turlariga qarab semantic tokenlarni moslashtirish
@@ -93,13 +92,14 @@ export default function FuelPage() {
     fetchFuels();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === "price" ? (value === "" ? "" : Number(value)) : value,
-    }));
-  };
+ const handleChange = (e) => {
+  const { name, value } = e.target;
+
+  setFormData((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
 
   const handleOpenCreate = () => {
     setModalMode("create");
@@ -114,7 +114,7 @@ export default function FuelPage() {
   setFormData({
     unit: fuel.unit || "",
     name: fuel.name || "",
-    price: fuel.price ?? "",
+   
   });
 
   onFormOpen();
@@ -127,7 +127,7 @@ export default function FuelPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.unit.trim() || !formData.name.trim() || !formData.price)
+    if (!formData.unit.trim() || !formData.name.trim())
       return;
 
     setIsSubmitting(true);
@@ -316,33 +316,7 @@ export default function FuelPage() {
                   </Flex>
 
                   {/* Kartochka Pasti */}
-                  <VStack align="start" spacing={1}>
-                    <Text
-                      fontSize="10px"
-                      fontWeight="700"
-                      color="textSecondary"
-                      letterSpacing="wider"
-                    >
-                      JORIY NARX
-                    </Text>
-                    <HStack align="baseline" spacing={1.5}>
-                      <Text
-                        fontSize="2xl"
-                        fontWeight="bold"
-                        color="text"
-                        letterSpacing="tight"
-                      >
-                        {Number(fuel.price).toLocaleString("uz-UZ")}
-                      </Text>
-                      <Text
-                        fontSize="xs"
-                        fontWeight="600"
-                        color="textSecondary"
-                      >
-                        UZS
-                      </Text>
-                    </HStack>
-                  </VStack>
+                
                 </Box>
               );
             })}
@@ -450,45 +424,7 @@ export default function FuelPage() {
                 </Select> */}
               </FormControl>
 
-              {/* Narxi */}
-              <FormControl isRequired>
-                <FormLabel
-                  fontSize="sm"
-                  fontWeight="medium"
-                  color="textSecondary"
-                >
-                  Narxi
-                </FormLabel>
-                <InputGroup>
-                  <Input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    placeholder="9200"
-                    focusBorderColor="primary"
-                    color="text"
-                    bg="surface"
-                    borderColor="border"
-                    _hover={{ borderColor: "primary" }}
-                    pr="4.5rem"
-                  />
-                  <InputRightElement
-                    width="4.5rem"
-                    h="100%"
-                    pointerEvents="none"
-                  >
-                    <Text
-                      fontSize="xs"
-                      fontWeight="bold"
-                      color="textSecondary"
-                      pr={3}
-                    >
-                      UZS
-                    </Text>
-                  </InputRightElement>
-                </InputGroup>
-              </FormControl>
+            
             </VStack>
           </ModalBody>
 

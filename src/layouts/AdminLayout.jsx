@@ -8,7 +8,7 @@ const links = [
   { label: "Bosh sahifa", to: "/superadmin/dashboard", icon: HomeIcon },
   { label: "Yoqilg'i xarajatlari", to: "/superadmin/costs", icon: Wallet2 },
   { label: "Avtomobillar", to: "/superadmin/cars", icon: Car },
-  { label: "Ehtiyot xarajatlari", to: "/superadmin/zapchast", icon: Wrench },
+  { label: "Ehtiyot qismlar", to: "/superadmin/zapchast", icon: Wrench },
   { label: "Xodimlar", to: "/superadmin/admins", icon: Users },
   { label: "Yoqilg'i", to: "/superadmin/fuel", icon: Fuel },
   { label: "Adminlar", to: "/superadmin/admin", icon: User },

@@ -436,13 +436,40 @@ function Dashboard() {
         const driver = car.driver || {};
         const responsible = car.responsible_employee || {};
         const fuelsArr = Array.isArray(item.fuels) ? item.fuels : [];
+        const holidayFuelsArr = Array.isArray(item.holiday_fuels)
+          ? item.holiday_fuels
+          : [];
+
+        const mergedFuelById = {};
+        [...fuelsArr, ...holidayFuelsArr].forEach((fuel) => {
+          if (!fuel || fuel.fuel_id === undefined || fuel.fuel_id === null)
+            return;
+          const fuelId = fuel.fuel_id;
+          const existing = mergedFuelById[fuelId] || {};
+          mergedFuelById[fuelId] = {
+            ...existing,
+            ...fuel,
+            fuel_id: fuelId,
+            fuel_name:
+              existing.fuel_name || fuel.fuel_name || existing.fuel_name,
+            fuel_unit:
+              existing.fuel_unit || fuel.fuel_unit || existing.fuel_unit,
+            consumed_amount:
+              Number(existing.consumed_amount || 0) +
+              Number(fuel.consumed_amount || 0),
+            consumed_sum:
+              Number(existing.consumed_sum || 0) +
+              Number(fuel.consumed_sum || 0),
+          };
+        });
+
         return {
           car_name:
             `${car.name || "Nomaʼlum"} ${car.plate_number || ""}`.trim(),
           driver_name: driver.full_name || "-",
           responsible_name: responsible.full_name || "-",
           total_mileage: Number(item.total_mileage) || 0,
-          fuels: fuelsArr,
+          fuels: Object.values(mergedFuelById),
         };
       });
 
